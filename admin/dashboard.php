@@ -91,7 +91,7 @@ if(!isset($_SESSION['role'])) {
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
 
     <!-- Event -->
-    <a href="event/index.php" style="text-decoration:none;">
+    <a href="event.php" style="text-decoration:none;">
         <div class="bg-white rounded-xl shadow-md p-6 text-center cursor-pointer menu-card transition-all">
             <i class="fas fa-calendar-alt text-4xl text-accent-blue mb-3"></i>
             <h3 class="font-bold text-lg text-gray-800">Event</h3>
@@ -101,7 +101,7 @@ if(!isset($_SESSION['role'])) {
     </a>
 
     <!-- Tiket -->
-    <a href="tiket/index.php" style="text-decoration:none;">
+    <a href="tiket.php" style="text-decoration:none;">
         <div class="bg-white rounded-xl shadow-md p-6 text-center cursor-pointer menu-card transition-all">
             <i class="fas fa-ticket-alt text-4xl text-accent-blue mb-3"></i>
             <h3 class="font-bold text-lg text-gray-800">Tiket</h3>
@@ -111,7 +111,7 @@ if(!isset($_SESSION['role'])) {
     </a>
 
     <!-- Venue -->
-    <a href="venue/index.php" style="text-decoration:none;">
+    <a href="venue.php" style="text-decoration:none;">
         <div class="bg-white rounded-xl shadow-md p-6 text-center cursor-pointer menu-card transition-all">
             <i class="fas fa-map-marker-alt text-4xl text-accent-blue mb-3"></i>
             <h3 class="font-bold text-lg text-gray-800">Venue</h3>
@@ -121,7 +121,7 @@ if(!isset($_SESSION['role'])) {
     </a>
 
     <!-- Voucher -->
-    <a href="voucher/index.php" style="text-decoration:none;">
+    <a href="voucher.php" style="text-decoration:none;">
         <div class="bg-white rounded-xl shadow-md p-6 text-center cursor-pointer menu-card transition-all">
             <i class="fas fa-gift text-4xl text-accent-blue mb-3"></i>
             <h3 class="font-bold text-lg text-gray-800">Voucher</h3>
