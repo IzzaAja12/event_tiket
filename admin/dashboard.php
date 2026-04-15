@@ -1,6 +1,15 @@
 <?php
+// Enable error reporting untuk debugging (hapus saat production)
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 session_start();
 include '../config/koneksi.php';
+
+// Cek koneksi database
+if (!$conn) {
+    die("Koneksi database gagal: " . mysqli_connect_error());
+}
 
 // Set default session jika belum ada
 if(!isset($_SESSION['role'])) {
@@ -8,37 +17,61 @@ if(!isset($_SESSION['role'])) {
     $_SESSION['nama'] = 'Admin';
 }
 
+// Function untuk cek query error
+function checkQuery($result, $query_name, $conn) {
+    if (!$result) {
+        die("Error pada query '$query_name': " . mysqli_error($conn));
+    }
+    return $result;
+}
+
 // =======================
 // AMBIL DATA STATISTIK REAL DARI DATABASE
 // =======================
 
 // Total Event
-$query_event = mysqli_query($conn, "SELECT COUNT(*) as total FROM event");
-$total_event = mysqli_fetch_assoc($query_event)['total'];
+$query_event = checkQuery(mysqli_query($conn, "SELECT COUNT(*) as total FROM event"), "Total Event", $conn);
+$total_event = mysqli_fetch_assoc($query_event)['total'] ?? 0;
 
 // Total Tiket (jumlah semua tiket dari semua event)
-$query_tiket = mysqli_query($conn, "SELECT COUNT(*) as total FROM tiket");
-$total_tiket = mysqli_fetch_assoc($query_tiket)['total'];
+$query_tiket = checkQuery(mysqli_query($conn, "SELECT COUNT(*) as total FROM tiket"), "Total Tiket", $conn);
+$total_tiket = mysqli_fetch_assoc($query_tiket)['total'] ?? 0;
 
 // Total Kuota Tiket (kapasitas total tiket yang tersedia)
 $query_kuota_tiket = mysqli_query($conn, "SELECT SUM(kuota) as total_kuota FROM tiket");
-$total_kuota_tiket = mysqli_fetch_assoc($query_kuota_tiket)['total_kuota'] ?? 0;
+if ($query_kuota_tiket) {
+    $total_kuota_tiket = mysqli_fetch_assoc($query_kuota_tiket)['total_kuota'] ?? 0;
+} else {
+    $total_kuota_tiket = 0;
+}
 
 // Total Venue
-$query_venue = mysqli_query($conn, "SELECT COUNT(*) as total FROM venue");
-$total_venue = mysqli_fetch_assoc($query_venue)['total'];
+$query_venue = checkQuery(mysqli_query($conn, "SELECT COUNT(*) as total FROM venue"), "Total Venue", $conn);
+$total_venue = mysqli_fetch_assoc($query_venue)['total'] ?? 0;
 
 // Total Voucher Aktif
 $query_voucher_aktif = mysqli_query($conn, "SELECT COUNT(*) as total FROM voucher WHERE status = 'aktif'");
-$total_voucher_aktif = mysqli_fetch_assoc($query_voucher_aktif)['total'];
+if ($query_voucher_aktif) {
+    $total_voucher_aktif = mysqli_fetch_assoc($query_voucher_aktif)['total'] ?? 0;
+} else {
+    $total_voucher_aktif = 0;
+}
 
 // Total Voucher (semua)
 $query_voucher = mysqli_query($conn, "SELECT COUNT(*) as total FROM voucher");
-$total_voucher = mysqli_fetch_assoc($query_voucher)['total'];
+if ($query_voucher) {
+    $total_voucher = mysqli_fetch_assoc($query_voucher)['total'] ?? 0;
+} else {
+    $total_voucher = 0;
+}
 
 // Total Kapasitas Venue (akumulasi semua venue)
 $query_kapasitas_venue = mysqli_query($conn, "SELECT SUM(kapasitas) as total_kapasitas FROM venue");
-$total_kapasitas_venue = mysqli_fetch_assoc($query_kapasitas_venue)['total_kapasitas'] ?? 0;
+if ($query_kapasitas_venue) {
+    $total_kapasitas_venue = mysqli_fetch_assoc($query_kapasitas_venue)['total_kapasitas'] ?? 0;
+} else {
+    $total_kapasitas_venue = 0;
+}
 
 // =======================
 // AMBIL DATA EVENT TERBARU (5 event terakhir)
@@ -46,10 +79,14 @@ $total_kapasitas_venue = mysqli_fetch_assoc($query_kapasitas_venue)['total_kapas
 $query_event_terbaru = mysqli_query($conn, "
     SELECT event.*, venue.nama_venue 
     FROM event 
-    JOIN venue ON event.id_venue = venue.id_venue 
+    LEFT JOIN venue ON event.id_venue = venue.id_venue 
     ORDER BY event.tanggal DESC 
     LIMIT 5
 ");
+
+if (!$query_event_terbaru) {
+    $query_event_terbaru = false;
+}
 
 // =======================
 // AMBIL DATA TIKET TERBARU
@@ -57,10 +94,14 @@ $query_event_terbaru = mysqli_query($conn, "
 $query_tiket_terbaru = mysqli_query($conn, "
     SELECT tiket.*, event.nama_event 
     FROM tiket 
-    JOIN event ON tiket.id_event = event.id_event 
+    LEFT JOIN event ON tiket.id_event = event.id_event 
     ORDER BY tiket.id_tiket DESC 
     LIMIT 5
 ");
+
+if (!$query_tiket_terbaru) {
+    $query_tiket_terbaru = false;
+}
 
 // =======================
 // HITUNG PENDAPATAN POTENSIAL (jika semua tiket terjual)
@@ -69,7 +110,12 @@ $query_pendapatan = mysqli_query($conn, "
     SELECT SUM(tiket.harga * tiket.kuota) as total_pendapatan 
     FROM tiket
 ");
-$total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ?? 0;
+
+if ($query_pendapatan) {
+    $total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ?? 0;
+} else {
+    $total_pendapatan = 0;
+}
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -139,8 +185,8 @@ $total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ??
             <div class="flex items-center space-x-4">
                 <div class="flex items-center space-x-2">
                     <i class="fas fa-user-circle text-accent-blue text-xl"></i>
-                    <span class="text-gray-700"><?php echo htmlspecialchars($_SESSION['nama']); ?></span>
-                    <span class="text-xs bg-soft-blue text-accent-blue px-2 py-1 rounded-full"><?php echo htmlspecialchars($_SESSION['role']); ?></span>
+                    <span class="text-gray-700"><?php echo htmlspecialchars($_SESSION['nama'] ?? 'Admin'); ?></span>
+                    
                 </div>
                 <a href="../auth/logout.php" class="text-gray-600 hover:text-red-500 transition"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </div>
@@ -173,7 +219,7 @@ $total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ??
                     <h3 class="font-bold text-lg text-gray-800">Event</h3>
                     <p class="text-gray-500 text-sm mt-1">Kelola daftar event</p>
                     <div class="mt-3 text-accent-blue text-sm font-semibold">
-                        <?= $total_event ?> Event →
+                        <?= number_format($total_event, 0, ',', '.') ?> Event →
                     </div>
                 </div>
             </a>
@@ -185,7 +231,7 @@ $total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ??
                     <h3 class="font-bold text-lg text-gray-800">Tiket</h3>
                     <p class="text-gray-500 text-sm mt-1">Atur jenis tiket</p>
                     <div class="mt-3 text-accent-blue text-sm font-semibold">
-                        <?= $total_tiket ?> Tiket →
+                        <?= number_format($total_tiket, 0, ',', '.') ?> Tiket →
                     </div>
                 </div>
             </a>
@@ -197,7 +243,7 @@ $total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ??
                     <h3 class="font-bold text-lg text-gray-800">Venue</h3>
                     <p class="text-gray-500 text-sm mt-1">Lokasi & kapasitas</p>
                     <div class="mt-3 text-accent-blue text-sm font-semibold">
-                        <?= $total_venue ?> Venue →
+                        <?= number_format($total_venue, 0, ',', '.') ?> Venue →
                     </div>
                 </div>
             </a>
@@ -209,7 +255,7 @@ $total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ??
                     <h3 class="font-bold text-lg text-gray-800">Voucher</h3>
                     <p class="text-gray-500 text-sm mt-1">Promo & diskon</p>
                     <div class="mt-3 text-accent-blue text-sm font-semibold">
-                        <?= $total_voucher_aktif ?> Aktif →
+                        <?= number_format($total_voucher_aktif, 0, ',', '.') ?> Aktif →
                     </div>
                 </div>
             </a>
@@ -262,7 +308,7 @@ $total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ??
                         <p class="text-gray-500 text-sm">Voucher</p>
                         <p class="text-2xl font-bold text-gray-800"><?= number_format($total_voucher_aktif, 0, ',', '.') ?></p>
                         <p class="text-xs text-orange-600 mt-1">
-                            <i class="fas fa-percent"></i> Total: <?= $total_voucher ?> voucher
+                            <i class="fas fa-percent"></i> Total: <?= number_format($total_voucher, 0, ',', '.') ?> voucher
                         </p>
                     </div>
                     <i class="fas fa-percent text-3xl text-accent-blue opacity-70"></i>
@@ -300,10 +346,10 @@ $total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ??
                     </thead>
                     <tbody class="divide-y divide-gray-200">
                         <?php 
-                        if(mysqli_num_rows($query_event_terbaru) > 0) {
+                        if($query_event_terbaru && mysqli_num_rows($query_event_terbaru) > 0) {
                             while($event = mysqli_fetch_assoc($query_event_terbaru)) {
                                 $today = date('Y-m-d');
-                                $event_date = $event['tanggal'];
+                                $event_date = $event['tanggal'] ?? '';
                                 if($event_date > $today) {
                                     $status = '<span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs"><i class="fas fa-check-circle mr-1"></i>Akan Datang</span>';
                                 } elseif($event_date == $today) {
@@ -313,9 +359,9 @@ $total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ??
                                 }
                         ?>
                         <tr class="hover:bg-blue-50 transition">
-                            <td class="px-6 py-4 font-medium text-gray-900"><?= htmlspecialchars($event['nama_event']) ?></td>
-                            <td class="px-6 py-4 text-gray-600"><?= htmlspecialchars($event['nama_venue']) ?></td>
-                            <td class="px-6 py-4 text-gray-600"><?= date('d M Y', strtotime($event['tanggal'])) ?></td>
+                            <td class="px-6 py-4 font-medium text-gray-900"><?= htmlspecialchars($event['nama_event'] ?? '-') ?></td>
+                            <td class="px-6 py-4 text-gray-600"><?= htmlspecialchars($event['nama_venue'] ?? '-') ?></td>
+                            <td class="px-6 py-4 text-gray-600"><?= isset($event['tanggal']) ? date('d M Y', strtotime($event['tanggal'])) : '-' ?></td>
                             <td class="px-6 py-4"><?= $status ?></td>
                         </tr>
                         <?php 
@@ -352,14 +398,14 @@ $total_pendapatan = mysqli_fetch_assoc($query_pendapatan)['total_pendapatan'] ??
                     </thead>
                     <tbody class="divide-y divide-gray-200">
                         <?php 
-                        if(mysqli_num_rows($query_tiket_terbaru) > 0) {
+                        if($query_tiket_terbaru && mysqli_num_rows($query_tiket_terbaru) > 0) {
                             while($tiket = mysqli_fetch_assoc($query_tiket_terbaru)) {
                         ?>
                         <tr class="hover:bg-blue-50 transition">
-                            <td class="px-6 py-4 text-gray-900"><?= htmlspecialchars($tiket['nama_event']) ?></td>
-                            <td class="px-6 py-4 font-medium text-gray-900"><?= htmlspecialchars($tiket['nama_tiket']) ?></td>
-                            <td class="px-6 py-4 text-gray-600">Rp <?= number_format($tiket['harga'], 0, ',', '.') ?></td>
-                            <td class="px-6 py-4 text-gray-600"><?= number_format($tiket['kuota'], 0, ',', '.') ?></td>
+                            <td class="px-6 py-4 text-gray-900"><?= htmlspecialchars($tiket['nama_event'] ?? '-') ?></td>
+                            <td class="px-6 py-4 font-medium text-gray-900"><?= htmlspecialchars($tiket['nama_tiket'] ?? '-') ?></td>
+                            <td class="px-6 py-4 text-gray-600">Rp <?= number_format($tiket['harga'] ?? 0, 0, ',', '.') ?></td>
+                            <td class="px-6 py-4 text-gray-600"><?= number_format($tiket['kuota'] ?? 0, 0, ',', '.') ?></td>
                         </tr>
                         <?php 
                             }

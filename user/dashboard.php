@@ -111,7 +111,7 @@ function safe($data) {
 <body class="bg-gradient-to-br from-soft-blue to-white min-h-screen">
     
     <!-- Navbar -->
-    <nav class="bg-white shadow-md sticky top-0 z-50">
+    <nav clgitass="bg-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-2">
                 <i class="fas fa-ticket-alt text-accent-blue text-2xl animate-pulse-slow"></i>
