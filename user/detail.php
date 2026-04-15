@@ -23,7 +23,7 @@ if ($id == 0) {
 
 // ambil data event lengkap dengan venue
 $query_event = mysqli_query($conn, "
-    SELECT event.*, venue.nama_venue, venue.alamat, venue.kapasitas
+    SELECT event.*, venue.nama_venue, venue.alamat, venue.kapasitas, venue.id_venue
     FROM event 
     JOIN venue ON event.id_venue = venue.id_venue 
     WHERE event.id_event = $id
@@ -41,9 +41,14 @@ $tiket = mysqli_query($conn, "
     SELECT * FROM tiket WHERE id_event = $id ORDER BY harga ASC
 ");
 
-// ambil voucher aktif
+// ambil voucher yang spesifik untuk event ini, venue ini, atau global
+// ambil voucher yang spesifik untuk event ini SAJA
 $voucher = mysqli_query($conn, "
-    SELECT * FROM voucher WHERE status = 'aktif' AND kuota > 0
+    SELECT * FROM voucher 
+    WHERE status = 'aktif' 
+    AND kuota > 0 
+    AND id_event = " . intval($id) . "
+    ORDER BY potongan DESC
 ");
 
 // Fungsi untuk aman
@@ -117,6 +122,13 @@ function safe($data) {
             font-size: 0.7rem;
             margin-top: 0.25rem;
         }
+        .voucher-badge {
+            transition: all 0.2s ease;
+        }
+        .voucher-badge:hover {
+            transform: scale(1.05);
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-soft-blue to-white min-h-screen">
@@ -132,7 +144,6 @@ function safe($data) {
                 <div class="flex items-center space-x-2">
                     <i class="fas fa-user-circle text-accent-blue text-xl"></i>
                     <span class="hidden md:inline text-gray-600"><?= safe($_SESSION['nama']) ?></span>
-                    
                 </div>
                 <a href="dashboard.php" class="text-gray-600 hover:text-accent-blue transition">
                     <i class="fas fa-arrow-left"></i> Kembali
@@ -145,12 +156,19 @@ function safe($data) {
     </nav>
     
     <div class="container mx-auto px-4 py-8 max-w-5xl">
-        <!-- Breadcrumb -->
-        <div class="text-sm text-gray-500 mb-4 animate-[slideIn_0.3s_ease-out]">
-            <a href="dashboard.php" class="hover:text-accent-blue">Dashboard</a>
-            <i class="fas fa-chevron-right mx-2 text-xs"></i>
-            <span class="text-gray-700">Detail Event</span>
+        
+        <!-- Alert Info Voucher -->
+        <?php if(mysqli_num_rows($voucher) > 0): ?>
+        <div class="mb-6 bg-gradient-to-r from-yellow-50 to-orange-50 border-l-4 border-orange-400 rounded-lg p-4 animate-[slideIn_0.3s_ease-out]">
+            <div class="flex items-start">
+                <i class="fas fa-gift text-orange-500 mt-0.5 mr-3"></i>
+                <div>
+                    <p class="text-sm font-semibold text-orange-800">🎉 Ada Voucher Khusus untuk Event Ini!</p>
+                    <p class="text-xs text-orange-600 mt-1">Gunakan voucher di bawah untuk mendapatkan diskon spesial.</p>
+                </div>
+            </div>
         </div>
+        <?php endif; ?>
 
         <!-- Main Content -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -214,10 +232,12 @@ function safe($data) {
 
                     <form action="order.php" method="POST" id="orderForm" onsubmit="return validateForm()">
                         <input type="hidden" name="id_event" value="<?= $event['id_event'] ?>">
+                        <input type="hidden" name="id_venue" value="<?= $event['id_venue'] ?>">
                         
                         <div class="p-6 space-y-4">
                             <?php 
                             $ada_tiket = false;
+                            mysqli_data_seek($tiket, 0);
                             while($t = mysqli_fetch_assoc($tiket)) { 
                                 $ada_tiket = true;
                                 $max_kuota = $t['kuota'];
@@ -291,7 +311,7 @@ function safe($data) {
                                         onclick="applyVoucher()"
                                         class="bg-accent-blue text-white px-3 py-2 rounded-lg hover:bg-accent-hover transition text-sm whitespace-nowrap"
                                     >
-                                        <i class="fas fa-check"></i> Terapkan
+                                        <i class="fas fa-check"></i> 
                                     </button>
                                 </div>
                                 <div id="voucherMessage" class="text-sm hidden"></div>
@@ -299,14 +319,46 @@ function safe($data) {
                             
                             <?php if (mysqli_num_rows($voucher) > 0): ?>
                             <div class="mt-4">
-                                <p class="text-xs text-gray-500 mb-2">Voucher yang tersedia:</p>
                                 <div class="flex flex-wrap gap-2">
-                                    <?php while($v = mysqli_fetch_assoc($voucher)): ?>
-                                    <span class="text-xs bg-white px-2 py-1 rounded-full border border-gray-200 text-gray-600">
-                                        <?= safe($v['kode_voucher']) ?> (<?= $v['potongan'] ?>% OFF)
-                                    </span>
+                                    <?php 
+                                    mysqli_data_seek($voucher, 0);
+                                    while($v = mysqli_fetch_assoc($voucher)):
+                                        $voucher_type = '';
+                                        $badge_color = '';
+                                        $badge_text = '';
+                                        
+                                        if($v['id_event'] == $id) {
+                                            $voucher_type = 'event';
+                                            $badge_color = 'bg-green-100 text-green-700 border-green-200';
+                                            $badge_text = 'Event Spesial';
+                                        } elseif($v['id_venue'] == $event['id_venue']) {
+                                            $voucher_type = 'venue';
+                                            $badge_color = 'bg-blue-100 text-blue-700 border-blue-200';
+                                            $badge_text = 'Venue Spesial';
+                                        } else {
+                                            $voucher_type = 'global';
+                                            $badge_color = 'bg-purple-100 text-purple-700 border-purple-200';
+                                            $badge_text = 'Global';
+                                        }
+                                    ?>
+                                    <div onclick="applyVoucherCode('<?= safe($v['kode_voucher']) ?>')" 
+                                         class="voucher-badge inline-flex items-center gap-1.5 text-xs <?= $badge_color ?> px-2.5 py-1 rounded-full border transition">
+                                        <i class="fas fa-tag"></i>
+                                        <span class="font-mono font-semibold"><?= safe($v['kode_voucher']) ?></span>
+                                        <span class="text-xs">(<?= $v['potongan'] ?>% OFF)</span>
+                                        <span class="text-[10px] opacity-70 ml-1"><?= $badge_text ?></span>
+                                    </div>
                                     <?php endwhile; ?>
                                 </div>
+                                <p class="text-xs text-gray-400 mt-2">
+                                    <i class="fas fa-info-circle"></i> Klik voucher untuk menggunakannya
+                                </p>
+                            </div>
+                            <?php else: ?>
+                            <div class="mt-4 text-center py-2">
+                                <p class="text-xs text-gray-400">
+                                    <i class="fas fa-info-circle"></i> Belum ada voucher khusus untuk event ini.
+                                </p>
                             </div>
                             <?php endif; ?>
                         </div>
@@ -319,7 +371,7 @@ function safe($data) {
                                     <span id="subtotal">Rp 0</span>
                                 </div>
                                 <div class="flex justify-between text-green-600" id="discountRow" style="display: none;">
-                                    <span>Diskon:</span>
+                                    <span>Diskon (<span id="discountPercent">0</span>%):</span>
                                     <span id="discount">- Rp 0</span>
                                 </div>
                                 <div class="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t border-gray-200">
@@ -362,21 +414,41 @@ function safe($data) {
             echo json_encode($data);
         ?>;
         
+        // Data voucher dari PHP
+        const voucherData = <?php 
+            $vouchers = [];
+            mysqli_data_seek($voucher, 0);
+            while($v = mysqli_fetch_assoc($voucher)) {
+                $vouchers[$v['kode_voucher']] = [
+                    'potongan' => $v['potongan'],
+                    'id_voucher' => $v['id_voucher'],
+                    'id_event' => $v['id_event'],
+                    'id_venue' => $v['id_venue']
+                ];
+            }
+            echo json_encode($vouchers);
+        ?>;
+        
         let appliedVoucher = null;
         let voucherPotongan = 0;
+        let appliedVoucherId = null;
+
+        // Fungsi untuk apply voucher dengan kode
+        function applyVoucherCode(kode) {
+            document.getElementById('kode_voucher').value = kode;
+            applyVoucher();
+        }
 
         // Fungsi validasi quantity real-time
         function validateQuantity(input, tiketId, maxKuota) {
             let value = parseInt(input.value);
             const errorDiv = document.getElementById('error_' + tiketId);
             
-            // Jika bukan angka atau kosong
             if (isNaN(value)) {
                 value = 0;
                 input.value = 0;
             }
             
-            // Validasi jika melebihi kuota
             if (value > maxKuota) {
                 input.classList.add('error-border');
                 errorDiv.classList.remove('hidden');
@@ -384,7 +456,6 @@ function safe($data) {
                 input.value = maxKuota;
                 value = maxKuota;
             } 
-            // Validasi jika kurang dari 0
             else if (value < 0) {
                 input.classList.add('error-border');
                 errorDiv.classList.remove('hidden');
@@ -392,14 +463,12 @@ function safe($data) {
                 input.value = 0;
                 value = 0;
             }
-            // Validasi normal
             else {
                 input.classList.remove('error-border');
                 errorDiv.classList.add('hidden');
                 errorDiv.innerHTML = '';
             }
             
-            // Update sisa kuota display (opsional)
             const sisaElement = document.getElementById('sisa_' + tiketId);
             if (sisaElement) {
                 const sisaBaru = maxKuota - value;
@@ -439,6 +508,12 @@ function safe($data) {
             
             if (!isValid) {
                 alert('Mohon periksa kembali jumlah tiket yang dipilih. Ada yang melebihi kuota.');
+            } else if (appliedVoucher) {
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'hidden';
+                hiddenInput.name = 'id_voucher';
+                hiddenInput.value = appliedVoucherId;
+                document.getElementById('orderForm').appendChild(hiddenInput);
             }
             
             return isValid;
@@ -447,14 +522,12 @@ function safe($data) {
         function updateTotal() {
             let subtotal = 0;
             
-            // Hitung subtotal dari semua tiket yang dipilih
             for (let id in tiketData) {
                 const qtyInput = document.getElementById('qty_' + id);
                 if (qtyInput) {
                     let qty = parseInt(qtyInput.value) || 0;
                     const maxKuota = tiketData[id].kuota;
                     
-                    // Pastikan tidak melebihi kuota
                     if (qty > maxKuota) {
                         qty = maxKuota;
                         qtyInput.value = maxKuota;
@@ -469,24 +542,21 @@ function safe($data) {
                 }
             }
             
-            // Tampilkan subtotal
             document.getElementById('subtotal').innerText = 'Rp ' + formatNumber(subtotal);
             
-            // Hitung diskon
             let diskon = 0;
             if (appliedVoucher && voucherPotongan > 0 && subtotal > 0) {
                 diskon = Math.floor(subtotal * voucherPotongan / 100);
             }
             
-            // Tampilkan diskon
             if (diskon > 0) {
                 document.getElementById('discountRow').style.display = 'flex';
                 document.getElementById('discount').innerText = '- Rp ' + formatNumber(diskon);
+                document.getElementById('discountPercent').innerText = voucherPotongan;
             } else {
                 document.getElementById('discountRow').style.display = 'none';
             }
             
-            // Hitung total
             const total = subtotal - diskon;
             document.getElementById('total').innerText = 'Rp ' + formatNumber(total);
         }
@@ -504,28 +574,15 @@ function safe($data) {
                 return;
             }
             
-            fetch('check_voucher.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'kode=' + encodeURIComponent(kode)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.valid) {
-                    messageDiv.innerHTML = '<i class="fas fa-check-circle"></i> ' + data.message;
-                    messageDiv.classList.remove('hidden', 'text-red-600', 'bg-red-50');
-                    messageDiv.classList.add('text-green-600', 'bg-green-50', 'p-2', 'rounded-lg');
-                } else {
-                    messageDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.message;
-                    messageDiv.classList.remove('hidden', 'text-green-600', 'bg-green-50');
-                    messageDiv.classList.add('text-red-600', 'bg-red-50', 'p-2', 'rounded-lg');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
+            if (voucherData[kode]) {
+                messageDiv.innerHTML = '<i class="fas fa-check-circle"></i> Voucher ' + kode + ' siap digunakan (' + voucherData[kode].potongan + '% off)';
+                messageDiv.classList.remove('hidden', 'text-red-600', 'bg-red-50');
+                messageDiv.classList.add('text-green-600', 'bg-green-50', 'p-2', 'rounded-lg');
+            } else {
+                messageDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Kode voucher tidak valid untuk event ini';
+                messageDiv.classList.remove('hidden', 'text-green-600', 'bg-green-50');
+                messageDiv.classList.add('text-red-600', 'bg-red-50', 'p-2', 'rounded-lg');
+            }
         }
 
         function applyVoucher() {
@@ -539,36 +596,34 @@ function safe($data) {
                 return;
             }
             
-            fetch('apply_voucher.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'kode=' + encodeURIComponent(kode)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.valid) {
-                    appliedVoucher = kode;
-                    voucherPotongan = data.potongan;
-                    updateTotal();
-                    
-                    messageDiv.innerHTML = '<i class="fas fa-check-circle"></i> Voucher ' + kode + ' berhasil diterapkan! Potongan ' + data.potongan + '%';
-                    messageDiv.classList.remove('hidden', 'text-red-600', 'bg-red-50');
-                    messageDiv.classList.add('text-green-600', 'bg-green-50', 'p-2', 'rounded-lg');
+            if (voucherData[kode]) {
+                appliedVoucher = kode;
+                voucherPotongan = voucherData[kode].potongan;
+                appliedVoucherId = voucherData[kode].id_voucher;
+                updateTotal();
+                
+                let voucherType = '';
+                if(voucherData[kode].id_event) {
+                    voucherType = ' (Khusus Event)';
+                } else if(voucherData[kode].id_venue) {
+                    voucherType = ' (Khusus Venue)';
                 } else {
-                    appliedVoucher = null;
-                    voucherPotongan = 0;
-                    updateTotal();
-                    
-                    messageDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.message;
-                    messageDiv.classList.remove('hidden', 'text-green-600', 'bg-green-50');
-                    messageDiv.classList.add('text-red-600', 'bg-red-50', 'p-2', 'rounded-lg');
+                    voucherType = ' (Global)';
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
+                
+                messageDiv.innerHTML = '<i class="fas fa-check-circle"></i> Voucher ' + kode + voucherType + ' berhasil diterapkan! Potongan ' + voucherPotongan + '%';
+                messageDiv.classList.remove('hidden', 'text-red-600', 'bg-red-50');
+                messageDiv.classList.add('text-green-600', 'bg-green-50', 'p-2', 'rounded-lg');
+            } else {
+                appliedVoucher = null;
+                voucherPotongan = 0;
+                appliedVoucherId = null;
+                updateTotal();
+                
+                messageDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Kode voucher tidak valid untuk event ini';
+                messageDiv.classList.remove('hidden', 'text-green-600', 'bg-green-50');
+                messageDiv.classList.add('text-red-600', 'bg-red-50', 'p-2', 'rounded-lg');
+            }
         }
 
         // Event listener untuk semua input quantity

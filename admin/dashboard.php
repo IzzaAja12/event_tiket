@@ -74,34 +74,81 @@ if ($query_kapasitas_venue) {
 }
 
 // =======================
-// AMBIL DATA EVENT TERBARU (5 event terakhir)
+// DATA UNTUK GRAFIK
 // =======================
-$query_event_terbaru = mysqli_query($conn, "
+
+// 1. Data Event per Bulan (6 bulan terakhir)
+$bulan_labels = [];
+$event_per_bulan = [];
+for ($i = 5; $i >= 0; $i--) {
+    $bulan = date('Y-m', strtotime("-$i months"));
+    $bulan_label = date('M Y', strtotime("-$i months"));
+    $bulan_labels[] = $bulan_label;
+    
+    $query = mysqli_query($conn, "
+        SELECT COUNT(*) as total 
+        FROM event 
+        WHERE DATE_FORMAT(tanggal, '%Y-%m') = '$bulan'
+    ");
+    $data = mysqli_fetch_assoc($query);
+    $event_per_bulan[] = $data['total'] ?? 0;
+}
+
+// 2. Data Status Tiket (Terjual vs Sisa)
+$query_terjual = mysqli_query($conn, "SELECT COUNT(*) as total FROM attendee");
+$total_terjual = mysqli_fetch_assoc($query_terjual)['total'] ?? 0;
+$total_sisa = max(0, $total_kuota_tiket - $total_terjual);
+
+// 3. Data Event per Venue (Top 5)
+$top_venues_labels = [];
+$top_venues_data = [];
+$query_top_venues = mysqli_query($conn, "
+    SELECT v.nama_venue, COUNT(e.id_event) as total_event
+    FROM venue v
+    LEFT JOIN event e ON v.id_venue = e.id_venue
+    GROUP BY v.id_venue
+    ORDER BY total_event DESC
+    LIMIT 5
+");
+while ($row = mysqli_fetch_assoc($query_top_venues)) {
+    $top_venues_labels[] = $row['nama_venue'];
+    $top_venues_data[] = $row['total_event'];
+}
+
+// =======================
+// PAGINATION & SEARCH UNTUK EVENT
+// =======================
+$limit = 10;
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$offset = ($page - 1) * $limit;
+$search = isset($_GET['search']) ? mysqli_real_escape_string($conn, $_GET['search']) : '';
+
+// Query dengan search
+$search_condition = "";
+if (!empty($search)) {
+    $search_condition = "WHERE (event.nama_event LIKE '%$search%' 
+                           OR venue.nama_venue LIKE '%$search%')";
+}
+
+// Total data untuk pagination
+$total_query = mysqli_query($conn, "
+    SELECT COUNT(*) as total
+    FROM event 
+    LEFT JOIN venue ON event.id_venue = venue.id_venue 
+    $search_condition
+");
+$total_data = mysqli_fetch_assoc($total_query)['total'];
+$total_pages = ceil($total_data / $limit);
+
+// Ambil data event dengan pagination
+$query_event_table = mysqli_query($conn, "
     SELECT event.*, venue.nama_venue 
     FROM event 
     LEFT JOIN venue ON event.id_venue = venue.id_venue 
+    $search_condition
     ORDER BY event.tanggal DESC 
-    LIMIT 5
+    LIMIT $offset, $limit
 ");
-
-if (!$query_event_terbaru) {
-    $query_event_terbaru = false;
-}
-
-// =======================
-// AMBIL DATA TIKET TERBARU
-// =======================
-$query_tiket_terbaru = mysqli_query($conn, "
-    SELECT tiket.*, event.nama_event 
-    FROM tiket 
-    LEFT JOIN event ON tiket.id_event = event.id_event 
-    ORDER BY tiket.id_tiket DESC 
-    LIMIT 5
-");
-
-if (!$query_tiket_terbaru) {
-    $query_tiket_terbaru = false;
-}
 
 // =======================
 // HITUNG PENDAPATAN POTENSIAL (jika semua tiket terjual)
@@ -125,6 +172,10 @@ if ($query_pendapatan) {
     <title>Admin Dashboard | Event Ticket</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Chart.js untuk Grafik -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS untuk Export Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -170,6 +221,23 @@ if ($query_pendapatan) {
         .menu-card:hover i, .menu-card:hover h3, .menu-card:hover p, .menu-card:hover div {
             color: white;
         }
+        .chart-container {
+            transition: all 0.3s ease;
+        }
+        .chart-container:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px -5px rgba(0,0,0,0.1);
+        }
+        .btn-export {
+            transition: all 0.2s ease;
+        }
+        .btn-export:hover {
+            transform: translateY(-2px);
+        }
+        canvas {
+            max-height: 200px !important;
+            width: 100% !important;
+        }
     </style>
 </head>
 <body class="bg-admin-bg">
@@ -178,15 +246,13 @@ if ($query_pendapatan) {
     <nav class="bg-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-3">
-                <i class="fas fa-crown text-accent-blue text-2xl"></i>
                 <span class="font-bold text-xl bg-gradient-to-r from-navy to-accent-blue bg-clip-text text-transparent">Admin Panel</span>
-                <span class="hidden md:inline text-xs bg-soft-blue text-accent-blue px-2 py-1 rounded-full">Event Ticket System</span>
+                <span class="hidden md:inline text-xs bg-soft-blue text-accent-blue px-2 py-1 rounded-full">EventTicket</span>
             </div>
             <div class="flex items-center space-x-4">
                 <div class="flex items-center space-x-2">
                     <i class="fas fa-user-circle text-accent-blue text-xl"></i>
                     <span class="text-gray-700"><?php echo htmlspecialchars($_SESSION['nama'] ?? 'Admin'); ?></span>
-                    
                 </div>
                 <a href="../auth/logout.php" class="text-gray-600 hover:text-red-500 transition"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </div>
@@ -211,165 +277,179 @@ if ($query_pendapatan) {
         </div>
         
         <!-- 4 Menu Utama: Event, Tiket, Venue, Voucher -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-            <!-- Event -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <a href="event.php" style="text-decoration:none;">
-                <div class="bg-white rounded-xl shadow-md p-6 text-center cursor-pointer menu-card transition-all">
-                    <i class="fas fa-calendar-alt text-4xl text-accent-blue mb-3"></i>
-                    <h3 class="font-bold text-lg text-gray-800">Event</h3>
-                    <p class="text-gray-500 text-sm mt-1">Kelola daftar event</p>
-                    <div class="mt-3 text-accent-blue text-sm font-semibold">
-                        <?= number_format($total_event, 0, ',', '.') ?> Event →
+                <div class="bg-white rounded-xl shadow-md p-5 text-center cursor-pointer menu-card transition-all">
+                    <i class="fas fa-calendar-alt text-3xl text-accent-blue mb-2"></i>
+                    <h3 class="font-bold text-gray-800">Event</h3>
+                    <div class="mt-2 text-accent-blue font-semibold">
+                        <?= number_format($total_event, 0, ',', '.') ?> Event
                     </div>
                 </div>
             </a>
-
-            <!-- Tiket -->
             <a href="tiket.php" style="text-decoration:none;">
-                <div class="bg-white rounded-xl shadow-md p-6 text-center cursor-pointer menu-card transition-all">
-                    <i class="fas fa-ticket-alt text-4xl text-accent-blue mb-3"></i>
-                    <h3 class="font-bold text-lg text-gray-800">Tiket</h3>
-                    <p class="text-gray-500 text-sm mt-1">Atur jenis tiket</p>
-                    <div class="mt-3 text-accent-blue text-sm font-semibold">
-                        <?= number_format($total_tiket, 0, ',', '.') ?> Tiket →
+                <div class="bg-white rounded-xl shadow-md p-5 text-center cursor-pointer menu-card transition-all">
+                    <i class="fas fa-ticket-alt text-3xl text-accent-blue mb-2"></i>
+                    <h3 class="font-bold text-gray-800">Tiket</h3>
+                    <div class="mt-2 text-accent-blue font-semibold">
+                        <?= number_format($total_tiket, 0, ',', '.') ?> Jenis
                     </div>
                 </div>
             </a>
-
-            <!-- Venue -->
             <a href="venue.php" style="text-decoration:none;">
-                <div class="bg-white rounded-xl shadow-md p-6 text-center cursor-pointer menu-card transition-all">
-                    <i class="fas fa-map-marker-alt text-4xl text-accent-blue mb-3"></i>
-                    <h3 class="font-bold text-lg text-gray-800">Venue</h3>
-                    <p class="text-gray-500 text-sm mt-1">Lokasi & kapasitas</p>
-                    <div class="mt-3 text-accent-blue text-sm font-semibold">
-                        <?= number_format($total_venue, 0, ',', '.') ?> Venue →
+                <div class="bg-white rounded-xl shadow-md p-5 text-center cursor-pointer menu-card transition-all">
+                    <i class="fas fa-map-marker-alt text-3xl text-accent-blue mb-2"></i>
+                    <h3 class="font-bold text-gray-800">Venue</h3>
+                    <div class="mt-2 text-accent-blue font-semibold">
+                        <?= number_format($total_venue, 0, ',', '.') ?> Venue
                     </div>
                 </div>
             </a>
-
-            <!-- Voucher -->
             <a href="voucher.php" style="text-decoration:none;">
-                <div class="bg-white rounded-xl shadow-md p-6 text-center cursor-pointer menu-card transition-all">
-                    <i class="fas fa-gift text-4xl text-accent-blue mb-3"></i>
-                    <h3 class="font-bold text-lg text-gray-800">Voucher</h3>
-                    <p class="text-gray-500 text-sm mt-1">Promo & diskon</p>
-                    <div class="mt-3 text-accent-blue text-sm font-semibold">
-                        <?= number_format($total_voucher_aktif, 0, ',', '.') ?> Aktif →
+                <div class="bg-white rounded-xl shadow-md p-5 text-center cursor-pointer menu-card transition-all">
+                    <i class="fas fa-gift text-3xl text-accent-blue mb-2"></i>
+                    <h3 class="font-bold text-gray-800">Voucher</h3>
+                    <div class="mt-2 text-accent-blue font-semibold">
+                        <?= number_format($total_voucher_aktif, 0, ',', '.') ?> Aktif
                     </div>
                 </div>
             </a>
         </div>        
         
-        <!-- Statistik Cepat (Data Real) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div class="stat-card bg-gradient-to-br from-white to-blue-50 rounded-xl p-4 shadow-sm border border-blue-100">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <p class="text-gray-500 text-sm">Total Event</p>
-                        <p class="text-2xl font-bold text-gray-800"><?= number_format($total_event, 0, ',', '.') ?></p>
-                        <p class="text-xs text-green-600 mt-1">
-                            <i class="fas fa-calendar-check"></i> Event tersedia
-                        </p>
+        <!-- GRAFIK SECTION - Ukuran Lebih Kecil -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
+            <!-- Grafik Event per Bulan -->
+            <div class="chart-container bg-white rounded-xl shadow-md p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-semibold text-gray-800 text-sm">
+                        <i class="fas fa-chart-line text-accent-blue mr-1"></i> Event per Bulan
+                    </h3>
+                </div>
+                <canvas id="eventChart" style="height: 180px !important; width: 100% !important;"></canvas>
+            </div>
+
+            <!-- Grafik Status Tiket -->
+            <div class="chart-container bg-white rounded-xl shadow-md p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-semibold text-gray-800 text-sm">
+                        <i class="fas fa-chart-pie text-accent-blue mr-1"></i> Status Tiket
+                    </h3>
+                </div>
+                <canvas id="ticketStatusChart" style="height: 140px !important; width: 100% !important;"></canvas>
+                <div class="mt-3 flex justify-center gap-4 text-xs">
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span>Terjual: <?= number_format($total_terjual, 0, ',', '.') ?></span>
                     </div>
-                    <i class="fas fa-calendar-alt text-3xl text-accent-blue opacity-70"></i>
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 rounded-full bg-blue-500"></div>
+                        <span>Sisa: <?= number_format($total_sisa, 0, ',', '.') ?></span>
+                    </div>
                 </div>
             </div>
-            
-            <div class="stat-card bg-gradient-to-br from-white to-blue-50 rounded-xl p-4 shadow-sm border border-blue-100">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <p class="text-gray-500 text-sm">Total Jenis Tiket</p>
-                        <p class="text-2xl font-bold text-gray-800"><?= number_format($total_tiket, 0, ',', '.') ?></p>
-                        <p class="text-xs text-blue-600 mt-1">
-                            <i class="fas fa-ticket-alt"></i> Kuota: <?= number_format($total_kuota_tiket, 0, ',', '.') ?>
-                        </p>
-                    </div>
-                    <i class="fas fa-ticket-alt text-3xl text-accent-blue opacity-70"></i>
+
+            <!-- Grafik Event per Venue -->
+            <div class="chart-container bg-white rounded-xl shadow-md p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-semibold text-gray-800 text-sm">
+                        <i class="fas fa-chart-bar text-accent-blue mr-1"></i> Event per Venue
+                    </h3>
                 </div>
-            </div>
-            
-            <div class="stat-card bg-gradient-to-br from-white to-blue-50 rounded-xl p-4 shadow-sm border border-blue-100">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <p class="text-gray-500 text-sm">Total Venue</p>
-                        <p class="text-2xl font-bold text-gray-800"><?= number_format($total_venue, 0, ',', '.') ?></p>
-                        <p class="text-xs text-purple-600 mt-1">
-                            <i class="fas fa-users"></i> Kapasitas: <?= number_format($total_kapasitas_venue, 0, ',', '.') ?>
-                        </p>
-                    </div>
-                    <i class="fas fa-building text-3xl text-accent-blue opacity-70"></i>
-                </div>
-            </div>
-            
-            <div class="stat-card bg-gradient-to-br from-white to-blue-50 rounded-xl p-4 shadow-sm border border-blue-100">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <p class="text-gray-500 text-sm">Voucher</p>
-                        <p class="text-2xl font-bold text-gray-800"><?= number_format($total_voucher_aktif, 0, ',', '.') ?></p>
-                        <p class="text-xs text-orange-600 mt-1">
-                            <i class="fas fa-percent"></i> Total: <?= number_format($total_voucher, 0, ',', '.') ?> voucher
-                        </p>
-                    </div>
-                    <i class="fas fa-percent text-3xl text-accent-blue opacity-70"></i>
-                </div>
+                <canvas id="venueChart" style="height: 180px !important; width: 100% !important;"></canvas>
             </div>
         </div>
-        
+
         <!-- Pendapatan Potensial Card -->
-        <div class="bg-gradient-to-r from-navy to-accent-blue rounded-xl shadow-lg p-6 mb-8 text-white">
+        <div class="bg-gradient-to-r from-navy to-accent-blue rounded-xl shadow-lg p-4 mb-8 text-white">
             <div class="flex justify-between items-center">
                 <div>
-                    <p class="text-white/80 text-sm">Pendapatan Potensial</p>
-                    <p class="text-3xl font-bold">Rp <?= number_format($total_pendapatan, 0, ',', '.') ?></p>
+                    <p class="text-white/80 text-xs">Pendapatan Potensial</p>
+                    <p class="text-2xl font-bold">Rp <?= number_format($total_pendapatan, 0, ',', '.') ?></p>
                     <p class="text-white/60 text-xs mt-1">Jika semua tiket terjual habis</p>
                 </div>
-                <i class="fas fa-chart-line text-5xl text-white/30"></i>
+                <i class="fas fa-chart-line text-4xl text-white/30"></i>
             </div>
         </div>
         
-        <!-- Tabel Preview Data Terbaru - Event -->
-        <div class="bg-white rounded-xl shadow-md overflow-hidden mb-8">
-            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h3 class="font-bold text-gray-800"><i class="fas fa-calendar-alt mr-2 text-accent-blue"></i> Event Terbaru</h3>
-                <a href="event.php" class="text-accent-blue text-sm hover:underline">Kelola Semua <i class="fas fa-arrow-right ml-1"></i></a>
+        <!-- Tabel Data Event dengan Search, Pagination, dan Export -->
+        <div class="bg-white rounded-xl shadow-md overflow-hidden">
+            <div class="px-5 py-3 border-b border-gray-200">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-3">
+                    <h3 class="font-bold text-gray-800">
+                        <i class="fas fa-calendar-alt mr-2 text-accent-blue"></i> Data Event
+                    </h3>
+                    <div class="flex flex-wrap gap-2">
+                        <!-- Form Search -->
+                        <form method="GET" action="" class="flex gap-2" id="searchForm">
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                <input 
+                                    type="text" 
+                                    name="search" 
+                                    id="searchInput"
+                                    class="pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-blue focus:border-transparent w-56"
+                                    placeholder="Cari event atau venue..."
+                                    value="<?= htmlspecialchars($search) ?>"
+                                >
+                            </div>
+                            <button type="submit" class="bg-accent-blue text-white px-3 py-1.5 text-sm rounded-lg hover:bg-accent-hover transition">
+                                <i class="fas fa-search"></i> Cari
+                            </button>
+                            <?php if (!empty($search)): ?>
+                            <a href="dashboard.php" class="bg-gray-500 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-gray-600 transition">
+                                <i class="fas fa-times"></i> Reset
+                            </a>
+                            <?php endif; ?>
+                        </form>
+                        <!-- Tombol Export -->
+                        <button onclick="exportToExcel()" class="btn-export bg-green-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-green-700 transition">
+                            <i class="fas fa-file-excel"></i> Excel
+                        </button>
+                        <button onclick="exportToCSV()" class="btn-export bg-blue-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-blue-700 transition">
+                            <i class="fas fa-file-csv"></i> CSV
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
+                <table class="min-w-full divide-y divide-gray-200" id="eventTable">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Venue</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
+                            <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
+                            <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Venue</th>
+                            <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
+                            <th class="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200">
                         <?php 
-                        if($query_event_terbaru && mysqli_num_rows($query_event_terbaru) > 0) {
-                            while($event = mysqli_fetch_assoc($query_event_terbaru)) {
+                        if($query_event_table && mysqli_num_rows($query_event_table) > 0) {
+                            $no = $offset + 1;
+                            while($event = mysqli_fetch_assoc($query_event_table)) {
                                 $today = date('Y-m-d');
                                 $event_date = $event['tanggal'] ?? '';
                                 if($event_date > $today) {
-                                    $status = '<span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs"><i class="fas fa-check-circle mr-1"></i>Akan Datang</span>';
+                                    $status = '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs"><i class="fas fa-check-circle mr-1"></i>Akan Datang</span>';
                                 } elseif($event_date == $today) {
-                                    $status = '<span class="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs"><i class="fas fa-calendar-day mr-1"></i>Hari Ini</span>';
+                                    $status = '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs"><i class="fas fa-calendar-day mr-1"></i>Hari Ini</span>';
                                 } else {
-                                    $status = '<span class="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs"><i class="fas fa-check-double mr-1"></i>Selesai</span>';
+                                    $status = '<span class="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs"><i class="fas fa-check-double mr-1"></i>Selesai</span>';
                                 }
                         ?>
                         <tr class="hover:bg-blue-50 transition">
-                            <td class="px-6 py-4 font-medium text-gray-900"><?= htmlspecialchars($event['nama_event'] ?? '-') ?></td>
-                            <td class="px-6 py-4 text-gray-600"><?= htmlspecialchars($event['nama_venue'] ?? '-') ?></td>
-                            <td class="px-6 py-4 text-gray-600"><?= isset($event['tanggal']) ? date('d M Y', strtotime($event['tanggal'])) : '-' ?></td>
-                            <td class="px-6 py-4"><?= $status ?></td>
+                            <td class="px-5 py-3 text-sm text-gray-600"><?= $no++ ?></td>
+                            <td class="px-5 py-3 font-medium text-gray-900 text-sm"><?= htmlspecialchars($event['nama_event'] ?? '-') ?></td>
+                            <td class="px-5 py-3 text-gray-600 text-sm"><?= htmlspecialchars($event['nama_venue'] ?? '-') ?></td>
+                            <td class="px-5 py-3 text-gray-600 text-sm"><?= isset($event['tanggal']) ? date('d M Y', strtotime($event['tanggal'])) : '-' ?></td>
+                            <td class="px-5 py-3"><?= $status ?></td>
                         </tr>
                         <?php 
                             }
                         } else { 
                         ?>
                         <tr>
-                            <td colspan="4" class="px-6 py-8 text-center text-gray-400">
+                            <td colspan="5" class="px-5 py-8 text-center text-gray-400">
                                 <i class="fas fa-inbox text-3xl mb-2 block"></i>
                                 Belum ada data event
                             </td>
@@ -378,58 +458,195 @@ if ($query_pendapatan) {
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Pagination -->
+            <?php if ($total_pages > 1): ?>
+            <div class="px-5 py-3 border-t border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-3">
+                <div class="text-xs text-gray-500">
+                    Menampilkan <?= $offset + 1 ?> - <?= min($offset + $limit, $total_data) ?> dari <?= number_format($total_data, 0, ',', '.') ?> data
+                </div>
+                <div class="flex gap-1 flex-wrap justify-center">
+                    <?php if ($page > 1): ?>
+                    <a href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>" 
+                       class="px-2.5 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                    <?php endif; ?>
+                    
+                    <?php
+                    $start_page = max(1, $page - 2);
+                    $end_page = min($total_pages, $page + 2);
+                    for ($i = $start_page; $i <= $end_page; $i++):
+                    ?>
+                    <a href="?page=<?= $i ?>&search=<?= urlencode($search) ?>" 
+                       class="px-3 py-1 text-sm border border-gray-300 rounded-lg transition <?= $i == $page ? 'bg-accent-blue text-white' : 'hover:bg-gray-50' ?>">
+                        <?= $i ?>
+                    </a>
+                    <?php endfor; ?>
+                    
+                    <?php if ($page < $total_pages): ?>
+                    <a href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>" 
+                       class="px-2.5 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
         </div>
 
-        <!-- Tabel Tiket Terbaru -->
-        <div class="bg-white rounded-xl shadow-md overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h3 class="font-bold text-gray-800"><i class="fas fa-ticket-alt mr-2 text-accent-blue"></i> Tiket Terbaru</h3>
-                <a href="tiket.php" class="text-accent-blue text-sm hover:underline">Kelola Semua <i class="fas fa-arrow-right ml-1"></i></a>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama Tiket</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Harga</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kuota</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        <?php 
-                        if($query_tiket_terbaru && mysqli_num_rows($query_tiket_terbaru) > 0) {
-                            while($tiket = mysqli_fetch_assoc($query_tiket_terbaru)) {
-                        ?>
-                        <tr class="hover:bg-blue-50 transition">
-                            <td class="px-6 py-4 text-gray-900"><?= htmlspecialchars($tiket['nama_event'] ?? '-') ?></td>
-                            <td class="px-6 py-4 font-medium text-gray-900"><?= htmlspecialchars($tiket['nama_tiket'] ?? '-') ?></td>
-                            <td class="px-6 py-4 text-gray-600">Rp <?= number_format($tiket['harga'] ?? 0, 0, ',', '.') ?></td>
-                            <td class="px-6 py-4 text-gray-600"><?= number_format($tiket['kuota'] ?? 0, 0, ',', '.') ?></td>
-                        </tr>
-                        <?php 
-                            }
-                        } else { 
-                        ?>
-                        <tr>
-                            <td colspan="4" class="px-6 py-8 text-center text-gray-400">
-                                <i class="fas fa-inbox text-3xl mb-2 block"></i>
-                                Belum ada data tiket
-                            </td>
-                        </tr>
-                        <?php } ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        
         <!-- Footer Admin -->
-        <div class="text-center text-gray-400 text-xs mt-8 py-4">
+        <div class="text-center text-gray-400 text-xs mt-6 py-4">
             <i class="fas fa-shield-alt text-accent-blue"></i> Admin Panel Secure • Event Ticket System v2.0
             <br>
             <span class="text-gray-300">© <?= date('Y') ?> Event Ticket System. All rights reserved.</span>
         </div>
     </div>
-    
+
+    <script>
+        // Data dari PHP untuk grafik
+        const bulanLabels = <?= json_encode($bulan_labels) ?>;
+        const eventPerBulan = <?= json_encode($event_per_bulan) ?>;
+        const totalTerjual = <?= $total_terjual ?>;
+        const totalSisa = <?= $total_sisa ?>;
+        const topVenuesLabels = <?= json_encode($top_venues_labels) ?>;
+        const topVenuesData = <?= json_encode($top_venues_data) ?>;
+
+        // Grafik Event per Bulan (Line Chart) - Ukuran lebih kecil
+        const eventCtx = document.getElementById('eventChart').getContext('2d');
+        new Chart(eventCtx, {
+            type: 'line',
+            data: {
+                labels: bulanLabels,
+                datasets: [{
+                    label: 'Event',
+                    data: eventPerBulan,
+                    borderColor: '#0066cc',
+                    backgroundColor: 'rgba(0, 102, 204, 0.05)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3,
+                    pointBackgroundColor: '#0066cc',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 1.5,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { backgroundColor: '#0a2540', bodyFont: { size: 11 } }
+                },
+                scales: { 
+                    y: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { font: { size: 10 } } },
+                    x: { ticks: { font: { size: 9 }, rotation: 0 } }
+                }
+            }
+        });
+
+        // Grafik Status Tiket (Doughnut Chart) - Ukuran lebih kecil
+        const ticketStatusCtx = document.getElementById('ticketStatusChart').getContext('2d');
+        new Chart(ticketStatusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Terjual', 'Sisa Kuota'],
+                datasets: [{
+                    data: [totalTerjual, totalSisa],
+                    backgroundColor: ['#10b981', '#3b82f6'],
+                    borderColor: '#fff',
+                    borderWidth: 1.5,
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { 
+                        backgroundColor: '#0a2540',
+                        bodyFont: { size: 11 },
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.raw || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                return `${context.label}: ${value.toLocaleString()} (${percentage}%)`;
+                            }
+                        }
+                    }
+                },
+                cutout: '65%'
+            }
+        });
+
+        // Grafik Event per Venue (Bar Chart)
+        const venueCtx = document.getElementById('venueChart').getContext('2d');
+        new Chart(venueCtx, {
+            type: 'bar',
+            data: {
+                labels: topVenuesLabels,
+                datasets: [{
+                    label: 'Jumlah Event',
+                    data: topVenuesData,
+                    backgroundColor: 'rgba(0, 102, 204, 0.7)',
+                    borderRadius: 4,
+                    barPercentage: 0.7,
+                    categoryPercentage: 0.8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { backgroundColor: '#0a2540', bodyFont: { size: 11 } }
+                },
+                scales: { 
+                    y: { beginAtZero: true, grid: { color: '#e2e8f0' }, ticks: { font: { size: 10 } } },
+                    x: { ticks: { font: { size: 9 }, rotation: 0, maxRotation: 30 } }
+                }
+            }
+        });
+
+        // Export ke Excel
+        function exportToExcel() {
+            const table = document.getElementById('eventTable');
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.table_to_sheet(table, { raw: true });
+            XLSX.utils.book_append_sheet(wb, ws, 'Data_Event');
+            XLSX.writeFile(wb, `Data_Event_<?= date('Y-m-d') ?>.xlsx`);
+        }
+
+        // Export ke CSV
+        function exportToCSV() {
+            const table = document.getElementById('eventTable');
+            const ws = XLSX.utils.table_to_sheet(table, { raw: true });
+            const csv = XLSX.utils.sheet_to_csv(ws);
+            const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.setAttribute('download', `Data_Event_<?= date('Y-m-d') ?>.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        // Search dengan enter
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('searchForm').submit();
+                }
+            });
+        }
+    </script>
 </body>
 </html>

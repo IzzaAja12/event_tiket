@@ -67,7 +67,7 @@
                 <div class="animate-[float_3s_ease-in-out_infinite]">
                     <i class="fas fa-ticket-alt text-white text-4xl mb-2"></i>
                 </div>
-                <h2 class="text-white text-2xl font-bold tracking-tight">Event Ticket System</h2>
+                <h2 class="text-white text-2xl font-bold tracking-tight">TiketMoo</h2>
                 <p class="text-blue-100 text-sm mt-1">Akses ke dashboard Anda</p>
             </div>
             

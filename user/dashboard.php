@@ -15,6 +15,44 @@ if(!isset($_SESSION['id_user'])) {
     $_SESSION['id_user'] = 1; // Default user ID, sesuaikan dengan sistem login Anda
 }
 
+$id_user = $_SESSION['id_user'];
+
+// =======================
+// AMBIL DATA TIKET YANG SUDAH DIBELI USER
+// =======================
+$query_my_tickets = mysqli_query($conn, "
+    SELECT COUNT(DISTINCT o.id_order) as total_order,
+           COUNT(a.id_attendee) as total_ticket,
+           SUM(od.subtotal) as total_spent
+    FROM orders o
+    JOIN order_detail od ON o.id_order = od.id_order
+    JOIN attendee a ON od.id_detail = a.id_detail
+    WHERE o.id_user = $id_user
+");
+
+$my_tickets_data = mysqli_fetch_assoc($query_my_tickets);
+$total_order = $my_tickets_data['total_order'] ?? 0;
+$total_ticket_bought = $my_tickets_data['total_ticket'] ?? 0;
+$total_spent = $my_tickets_data['total_spent'] ?? 0;
+
+// Ambil 3 tiket terbaru untuk ditampilkan di widget
+$query_recent_tickets = mysqli_query($conn, "
+    SELECT 
+        a.kode_tiket,
+        a.status_checkin,
+        e.nama_event,
+        e.tanggal as event_tanggal,
+        e.foto as event_foto,
+        o.tanggal_order
+    FROM attendee a
+    JOIN order_detail od ON a.id_detail = od.id_detail
+    JOIN orders o ON od.id_order = o.id_order
+    JOIN event e ON o.id_event = e.id_event
+    WHERE o.id_user = $id_user
+    ORDER BY o.tanggal_order DESC, a.id_attendee DESC
+    LIMIT 3
+");
+
 // =======================
 // AMBIL DATA EVENT TERBARU DARI DATABASE
 // =======================
@@ -106,24 +144,41 @@ function safe($data) {
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
+        .stat-card {
+            transition: all 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px -5px rgba(0,102,204,0.15);
+        }
+        .ticket-item:hover {
+            background-color: #f8fafc;
+            transform: translateX(5px);
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-soft-blue to-white min-h-screen">
     
     <!-- Navbar -->
-    <nav clgitass="bg-white shadow-md sticky top-0 z-50">
+    <nav class="bg-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-2">
                 <i class="fas fa-ticket-alt text-accent-blue text-2xl animate-pulse-slow"></i>
-                <span class="font-bold text-xl bg-gradient-to-r from-navy to-accent-blue bg-clip-text text-transparent">EventTicket</span>
+                <span class="font-bold text-xl bg-gradient-to-r from-navy to-accent-blue bg-clip-text text-transparent">TiketMoo</span>
             </div>
             <div class="flex items-center space-x-4">
-                <div class="flex items-center space-x-2">
+                <!-- <div class="flex items-center space-x-2">
                     <i class="fas fa-user-circle text-accent-blue text-xl"></i>
                     <span class="hidden md:inline text-gray-600"><?php echo safe($_SESSION['nama']); ?></span>
-                   
-                </div>
-                <a href="../auth/logout.php" class="text-gray-600 hover:text-accent-blue transition"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                </div> -->
+                <!-- Tombol My Tickets -->
+                <a href="my_tickets.php" class="text-accent-blue hover:text-blue-700 transition flex items-center gap-1 font-medium">
+                    <i class="fas fa-ticket-alt"></i> My Tickets
+                    <?php if($total_ticket_bought > 0): ?>
+                    <span class="bg-accent-blue text-white text-xs rounded-full px-2 py-0.5 ml-1"><?= $total_ticket_bought ?></span>
+                    <?php endif; ?>
+                </a>
+                <a href="../auth/logout.php" class="text-gray-600 hover:text-red-500 transition"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </div>
         </div>
     </nav>
@@ -136,11 +191,50 @@ function safe($data) {
                     <h1 class="text-2xl md:text-3xl font-bold">Selamat datang, <?php echo safe($_SESSION['nama']); ?>! 👋</h1>
                     <p class="text-blue-100 mt-1">Temukan dan pesan tiket event favorit Anda</p>
                 </div>
-                <div class="mt-4 md:mt-0">
+                <!-- <div class="mt-4 md:mt-0 flex gap-3">
+                    <a href="my_tickets.php" class="bg-white/20 hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-lg transition flex items-center gap-2">
+                        <i class="fas fa-ticket-alt"></i>
+                    </a>
                     <i class="fas fa-calendar-alt text-5xl opacity-50"></i>
+                </div> -->
+            </div>
+        </div>
+        
+        <!-- Statistik Pribadi User -->
+        <?php if($total_ticket_bought > 0): ?>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div class="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl p-4 stat-card cursor-pointer" onclick="window.location.href='my_tickets.php'">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-green-700 text-sm font-medium">Total Tiket Dibeli</p>
+                        <p class="font-bold text-2xl text-green-800"><?= number_format($total_ticket_bought, 0, ',', '.') ?> Tiket</p>
+                    </div>
+                    <i class="fas fa-ticket-alt text-4xl text-green-600 opacity-50"></i>
+                </div>
+                <p class="text-green-600 text-xs mt-2">Klik untuk lihat detail</p>
+            </div>
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl p-4 stat-card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-blue-700 text-sm font-medium">Total Pesanan</p>
+                        <p class="font-bold text-2xl text-blue-800"><?= number_format($total_order, 0, ',', '.') ?> Order</p>
+                    </div>
+                    <i class="fas fa-shopping-bag text-4xl text-blue-600 opacity-50"></i>
+                </div>
+            </div>
+            <div class="bg-gradient-to-br from-purple-50 to-pink-100 rounded-xl p-4 stat-card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-purple-700 text-sm font-medium">Total Belanja</p>
+                        <p class="font-bold text-2xl text-purple-800">Rp <?= number_format($total_spent, 0, ',', '.') ?></p>
+                    </div>
+                    <i class="fas fa-money-bill-wave text-4xl text-purple-600 opacity-50"></i>
                 </div>
             </div>
         </div>
+        <?php endif; ?>
+        
+ 
         
         <!-- Grid Event (Fitur Event) -->
         <div class="mb-8">
@@ -229,14 +323,14 @@ function safe($data) {
         
         <!-- Statistik Singkat -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
-            <div class="bg-white p-4 rounded-xl shadow-md flex items-center space-x-3 hover:shadow-lg transition">
+            <div class="bg-white p-4 rounded-xl shadow-md flex items-center space-x-3 hover:shadow-lg transition cursor-pointer" onclick="window.location.href='events.php'">
                 <i class="fas fa-calendar-check text-3xl text-accent-blue"></i>
                 <div>
                     <p class="text-gray-500 text-sm">Event Tersedia</p>
                     <p class="font-bold text-xl"><?= number_format($total_event_available, 0, ',', '.') ?> Event</p>
                 </div>
             </div>
-            <div class="bg-white p-4 rounded-xl shadow-md flex items-center space-x-3 hover:shadow-lg transition">
+            <div class="bg-white p-4 rounded-xl shadow-md flex items-center space-x-3 hover:shadow-lg transition cursor-pointer" onclick="window.location.href='venues.php'">
                 <i class="fas fa-map-marker-alt text-3xl text-accent-blue"></i>
                 <div>
                     <p class="text-gray-500 text-sm">Total Venue</p>
@@ -250,6 +344,29 @@ function safe($data) {
                     <p class="font-bold text-xl"><?= number_format($total_tiket, 0, ',', '.') ?> Tiket</p>
                 </div>
             </div>
+        </div>
+        
+        <!-- Quick Action Buttons -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+            <a href="my_tickets.php" class="bg-white p-3 rounded-xl shadow-md text-center hover:shadow-lg transition group">
+                <i class="fas fa-ticket-alt text-accent-blue text-xl group-hover:scale-110 transition inline-block"></i>
+                <p class="text-sm font-medium text-gray-700 mt-1">My Tickets</p>
+                <?php if($total_ticket_bought > 0): ?>
+                <p class="text-xs text-gray-400"><?= $total_ticket_bought ?> tiket</p>
+                <?php endif; ?>
+            </a>
+            <a href="events.php" class="bg-white p-3 rounded-xl shadow-md text-center hover:shadow-lg transition group">
+                <i class="fas fa-calendar-alt text-accent-blue text-xl group-hover:scale-110 transition inline-block"></i>
+                <p class="text-sm font-medium text-gray-700 mt-1">Cari Event</p>
+            </a>
+            <a href="profile.php" class="bg-white p-3 rounded-xl shadow-md text-center hover:shadow-lg transition group">
+                <i class="fas fa-user-circle text-accent-blue text-xl group-hover:scale-110 transition inline-block"></i>
+                <p class="text-sm font-medium text-gray-700 mt-1">Profil Saya</p>
+            </a>
+            <a href="invoice.php" class="bg-white p-3 rounded-xl shadow-md text-center hover:shadow-lg transition group">
+                <i class="fas fa-receipt text-accent-blue text-xl group-hover:scale-110 transition inline-block"></i>
+                <p class="text-sm font-medium text-gray-700 mt-1">Riwayat</p>
+            </a>
         </div>
         
         <!-- Footer -->

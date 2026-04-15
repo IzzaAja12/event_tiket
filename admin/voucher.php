@@ -16,16 +16,17 @@ if (isset($_GET['hapus'])) {
    INSERT
 ======================= */
 if (isset($_POST['simpan'])) {
-    $kode = $_POST['kode_voucher'];
+    $kode = strtoupper($_POST['kode_voucher']);
     $potongan = $_POST['potongan'];
     $kuota = $_POST['kuota'];
     $status = $_POST['status'];
+    $id_event = !empty($_POST['id_event']) ? $_POST['id_event'] : 'NULL';
+    $id_venue = !empty($_POST['id_venue']) ? $_POST['id_venue'] : 'NULL';
 
-    mysqli_query($conn, "
-        INSERT INTO voucher (kode_voucher, potongan, kuota, status)
-        VALUES ('$kode','$potongan','$kuota','$status')
-    ");
-
+    $query = "INSERT INTO voucher (kode_voucher, potongan, kuota, status, id_event, id_venue) 
+              VALUES ('$kode','$potongan','$kuota','$status', " . ($id_event == 'NULL' ? 'NULL' : $id_event) . ", " . ($id_venue == 'NULL' ? 'NULL' : $id_venue) . ")";
+    
+    mysqli_query($conn, $query);
     header("Location: voucher.php");
     exit;
 }
@@ -35,20 +36,23 @@ if (isset($_POST['simpan'])) {
 ======================= */
 if (isset($_POST['update'])) {
     $id = $_POST['id'];
-    $kode = $_POST['kode_voucher'];
+    $kode = strtoupper($_POST['kode_voucher']);
     $potongan = $_POST['potongan'];
     $kuota = $_POST['kuota'];
     $status = $_POST['status'];
+    $id_event = !empty($_POST['id_event']) ? $_POST['id_event'] : 'NULL';
+    $id_venue = !empty($_POST['id_venue']) ? $_POST['id_venue'] : 'NULL';
 
-    mysqli_query($conn, "
-        UPDATE voucher 
-        SET kode_voucher='$kode',
-            potongan='$potongan',
-            kuota='$kuota',
-            status='$status'
-        WHERE id_voucher=$id
-    ");
-
+    $query = "UPDATE voucher 
+              SET kode_voucher='$kode',
+                  potongan='$potongan',
+                  kuota='$kuota',
+                  status='$status',
+                  id_event = " . ($id_event == 'NULL' ? 'NULL' : $id_event) . ",
+                  id_venue = " . ($id_venue == 'NULL' ? 'NULL' : $id_venue) . "
+              WHERE id_voucher=$id";
+    
+    mysqli_query($conn, $query);
     header("Location: voucher.php");
     exit;
 }
@@ -63,9 +67,34 @@ if (isset($_GET['edit'])) {
 }
 
 /* =======================
-   AMBIL DATA
+   AMBIL DATA EVENT & VENUE
 ======================= */
-$data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
+$events = mysqli_query($conn, "SELECT * FROM event ORDER BY tanggal DESC");
+$venues = mysqli_query($conn, "SELECT * FROM venue ORDER BY nama_venue ASC");
+
+/* =======================
+   AMBIL DATA VOUCHER
+======================= */
+$data = mysqli_query($conn, "
+    SELECT v.*, 
+           e.nama_event, 
+           vn.nama_venue,
+           CASE 
+               WHEN v.id_event IS NOT NULL THEN CONCAT('Event: ', e.nama_event)
+               WHEN v.id_venue IS NOT NULL THEN CONCAT('Venue: ', vn.nama_venue)
+               ELSE 'Global'
+           END as target_info
+    FROM voucher v
+    LEFT JOIN event e ON v.id_event = e.id_event
+    LEFT JOIN venue vn ON v.id_venue = vn.id_venue
+    ORDER BY 
+        CASE 
+            WHEN v.id_event IS NOT NULL THEN 1
+            WHEN v.id_venue IS NOT NULL THEN 2
+            ELSE 3
+        END,
+        v.id_voucher DESC
+");
 ?>
 
 <!DOCTYPE html>
@@ -223,7 +252,7 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
             background-color: var(--white);
             border-radius: var(--radius-xl);
             width: 90%;
-            max-width: 500px;
+            max-width: 600px;
             max-height: 90vh;
             overflow-y: auto;
             animation: slideUp 0.3s ease;
@@ -415,7 +444,7 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
             width: 100%;
             border-collapse: separate;
             border-spacing: 0;
-            min-width: 600px;
+            min-width: 800px;
         }
 
         .table th {
@@ -491,6 +520,21 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
             color: #991b1b;
         }
 
+        .badge-event {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-venue {
+            background-color: #fce7f3;
+            color: #9d174d;
+        }
+
+        .badge-global {
+            background-color: #e0e7ff;
+            color: #3730a3;
+        }
+
         .empty-state {
             text-align: center;
             padding: 3rem;
@@ -502,6 +546,19 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
             color: #cbd5e1;
             margin-bottom: 1rem;
             display: block;
+        }
+
+        .info-box {
+            background-color: var(--soft-blue);
+            border-left: 4px solid var(--accent-blue);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            margin-bottom: 1rem;
+        }
+
+        .info-box p {
+            font-size: 0.875rem;
+            color: var(--text-muted);
         }
 
         @media (max-width: 768px) {
@@ -542,6 +599,14 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
             </button>
         </div>
 
+        <!-- Info Box -->
+        <div class="info-box">
+            <p><i class="fas fa-info-circle"></i> <strong>Jenis Voucher:</strong></p>
+            <p style="margin-top: 0.5rem;">• <span class="badge badge-event">Event Spesifik</span> - Hanya berlaku untuk event tertentu</p>
+            <p>• <span class="badge badge-venue">Venue Spesifik</span> - Hanya berlaku untuk venue tertentu</p>
+            <p>• <span class="badge badge-global">Global</span> - Berlaku untuk semua event</p>
+        </div>
+
         <!-- TABEL DATA VOUCHER -->
         <div class="card">
             <div class="table-responsive" style="padding: 1.5rem;">
@@ -549,10 +614,11 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
                     <thead>
                         <tr>
                             <th width="5%">No</th>
-                            <th width="25%">Kode Voucher</th>
-                            <th width="20%">Potongan</th>
-                            <th width="20%">Kuota</th>
-                            <th width="20%">Status</th>
+                            <th width="20%">Kode Voucher</th>
+                            <th width="15%">Potongan</th>
+                            <th width="15%">Kuota</th>
+                            <th width="25%">Target</th>
+                            <th width="10%">Status</th>
                             <th width="10%" style="text-align: center;">Aksi</th>
                         </tr>
                     </thead>
@@ -561,6 +627,14 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
                         $no = 1;
                         if(mysqli_num_rows($data) > 0) {
                             while($row = mysqli_fetch_assoc($data)) { 
+                                // Tentukan badge untuk target
+                                if($row['id_event']) {
+                                    $target_badge = '<span class="badge badge-event"><i class="fas fa-calendar-alt"></i> ' . htmlspecialchars($row['nama_event']) . '</span>';
+                                } elseif($row['id_venue']) {
+                                    $target_badge = '<span class="badge badge-venue"><i class="fas fa-map-marker-alt"></i> ' . htmlspecialchars($row['nama_venue']) . '</span>';
+                                } else {
+                                    $target_badge = '<span class="badge badge-global"><i class="fas fa-globe"></i> Semua Event</span>';
+                                }
                         ?>
                         <tr>
                             <td><?= $no++ ?></td>
@@ -571,7 +645,7 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
                             </td>
                             <td>
                                 <span class="badge badge-discount">
-                                    <i class="fas fa-percent"></i> <?= $row['potongan'] ?>% OFF
+                                   <?= $row['potongan'] ?>% OFF
                                 </span>
                             </td>
                             <td>
@@ -579,6 +653,7 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
                                     <i class="fas fa-ticket-alt"></i> <?= number_format($row['kuota'], 0, ',', '.') ?>x
                                 </span>
                             </td>
+                            <td><?= $target_badge ?></td>
                             <td>
                                 <?php if ($row['status'] == 'aktif') { ?>
                                     <span class="badge badge-status-active">
@@ -600,7 +675,6 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
                                         <i class="fas fa-trash-alt"></i>
                                     </a>
                                 </div>
-                              </div>
                             </td>
                         </tr>
                         <?php 
@@ -608,7 +682,7 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
                         } else {
                         ?>
                         <tr>
-                            <td colspan="6" class="empty-state">
+                            <td colspan="7" class="empty-state">
                                 <i class="fas fa-ticket-alt"></i>
                                 Belum ada data voucher.
                                 <p style="margin-top: 0.5rem; font-size: 0.875rem;">Silakan tambah voucher baru dengan tombol di atas.</p>
@@ -661,6 +735,53 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
                         <small style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
                             <i class="fas fa-info-circle"></i> Berapa kali voucher ini dapat digunakan
                         </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="target_type">Target Voucher</label>
+                        <select id="target_type" class="form-control" onchange="toggleTargetFields()">
+                            <option value="global">Global (Semua Event)</option>
+                            <option value="event">Event Spesifik</option>
+                            <option value="venue">Venue Spesifik</option>
+                        </select>
+                    </div>
+
+                    <div id="event_field" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label" for="id_event">Pilih Event</label>
+                            <div class="input-group" style="position: relative;">
+                                <select id="id_event" name="id_event" class="form-control">
+                                    <option value="">-- Pilih Event --</option>
+                                    <?php 
+                                    mysqli_data_seek($events, 0);
+                                    while($e = mysqli_fetch_assoc($events)) { ?>
+                                        <option value="<?= $e['id_event'] ?>">
+                                            <?= htmlspecialchars($e['nama_event']) ?> - <?= date('d F Y', strtotime($e['tanggal'])) ?>
+                                        </option>
+                                    <?php } ?>
+                                </select>
+                                <i class="fas fa-chevron-down dropdown-icon"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="venue_field" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label" for="id_venue">Pilih Venue</label>
+                            <div class="input-group" style="position: relative;">
+                                <select id="id_venue" name="id_venue" class="form-control">
+                                    <option value="">-- Pilih Venue --</option>
+                                    <?php 
+                                    mysqli_data_seek($venues, 0);
+                                    while($v = mysqli_fetch_assoc($venues)) { ?>
+                                        <option value="<?= $v['id_venue'] ?>">
+                                            <?= htmlspecialchars($v['nama_venue']) ?> - Kapasitas: <?= number_format($v['kapasitas'], 0, ',', '.') ?>
+                                        </option>
+                                    <?php } ?>
+                                </select>
+                                <i class="fas fa-chevron-down dropdown-icon"></i>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -720,6 +841,53 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label" for="edit_target_type">Target Voucher</label>
+                        <select id="edit_target_type" class="form-control" onchange="toggleEditTargetFields()">
+                            <option value="global" <?= ($edit['id_event'] === null && $edit['id_venue'] === null) ? 'selected' : '' ?>>Global (Semua Event)</option>
+                            <option value="event" <?= ($edit['id_event'] !== null) ? 'selected' : '' ?>>Event Spesifik</option>
+                            <option value="venue" <?= ($edit['id_venue'] !== null) ? 'selected' : '' ?>>Venue Spesifik</option>
+                        </select>
+                    </div>
+
+                    <div id="edit_event_field" style="display: <?= ($edit['id_event'] !== null) ? 'block' : 'none' ?>;">
+                        <div class="form-group">
+                            <label class="form-label" for="edit_id_event">Pilih Event</label>
+                            <div class="input-group" style="position: relative;">
+                                <select id="edit_id_event" name="id_event" class="form-control">
+                                    <option value="">-- Pilih Event --</option>
+                                    <?php 
+                                    mysqli_data_seek($events, 0);
+                                    while($e = mysqli_fetch_assoc($events)) { ?>
+                                        <option value="<?= $e['id_event'] ?>" <?= ($edit['id_event'] == $e['id_event']) ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($e['nama_event']) ?> - <?= date('d F Y', strtotime($e['tanggal'])) ?>
+                                        </option>
+                                    <?php } ?>
+                                </select>
+                                <i class="fas fa-chevron-down dropdown-icon"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="edit_venue_field" style="display: <?= ($edit['id_venue'] !== null) ? 'block' : 'none' ?>;">
+                        <div class="form-group">
+                            <label class="form-label" for="edit_id_venue">Pilih Venue</label>
+                            <div class="input-group" style="position: relative;">
+                                <select id="edit_id_venue" name="id_venue" class="form-control">
+                                    <option value="">-- Pilih Venue --</option>
+                                    <?php 
+                                    mysqli_data_seek($venues, 0);
+                                    while($v = mysqli_fetch_assoc($venues)) { ?>
+                                        <option value="<?= $v['id_venue'] ?>" <?= ($edit['id_venue'] == $v['id_venue']) ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($v['nama_venue']) ?> - Kapasitas: <?= number_format($v['kapasitas'], 0, ',', '.') ?>
+                                        </option>
+                                    <?php } ?>
+                                </select>
+                                <i class="fas fa-chevron-down dropdown-icon"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label" for="edit_status">Status Voucher</label>
                         <div class="input-group" style="position: relative;">
                             <select id="edit_status" name="status" class="form-control" required>
@@ -742,6 +910,60 @@ $data = mysqli_query($conn, "SELECT * FROM voucher ORDER BY id_voucher DESC");
     <?php endif; ?>
 
     <script>
+        function toggleTargetFields() {
+            const targetType = document.getElementById('target_type').value;
+            const eventField = document.getElementById('event_field');
+            const venueField = document.getElementById('venue_field');
+            
+            if (targetType === 'event') {
+                eventField.style.display = 'block';
+                venueField.style.display = 'none';
+                document.getElementById('id_event').required = true;
+                document.getElementById('id_venue').required = false;
+                document.getElementById('id_venue').value = '';
+            } else if (targetType === 'venue') {
+                eventField.style.display = 'none';
+                venueField.style.display = 'block';
+                document.getElementById('id_event').required = false;
+                document.getElementById('id_venue').required = true;
+                document.getElementById('id_event').value = '';
+            } else {
+                eventField.style.display = 'none';
+                venueField.style.display = 'none';
+                document.getElementById('id_event').required = false;
+                document.getElementById('id_venue').required = false;
+                document.getElementById('id_event').value = '';
+                document.getElementById('id_venue').value = '';
+            }
+        }
+
+        function toggleEditTargetFields() {
+            const targetType = document.getElementById('edit_target_type').value;
+            const eventField = document.getElementById('edit_event_field');
+            const venueField = document.getElementById('edit_venue_field');
+            
+            if (targetType === 'event') {
+                eventField.style.display = 'block';
+                venueField.style.display = 'none';
+                document.getElementById('edit_id_event').required = true;
+                document.getElementById('edit_id_venue').required = false;
+                document.getElementById('edit_id_venue').value = '';
+            } else if (targetType === 'venue') {
+                eventField.style.display = 'none';
+                venueField.style.display = 'block';
+                document.getElementById('edit_id_event').required = false;
+                document.getElementById('edit_id_venue').required = true;
+                document.getElementById('edit_id_event').value = '';
+            } else {
+                eventField.style.display = 'none';
+                venueField.style.display = 'none';
+                document.getElementById('edit_id_event').required = false;
+                document.getElementById('edit_id_venue').required = false;
+                document.getElementById('edit_id_event').value = '';
+                document.getElementById('edit_id_venue').value = '';
+            }
+        }
+
         // Fungsi untuk membuka modal
         function openModal(modalId) {
             document.getElementById(modalId).classList.add('show');

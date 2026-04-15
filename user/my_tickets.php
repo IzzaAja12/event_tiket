@@ -77,6 +77,8 @@ function safe($data) {
     <title>Tiket Saya | EventTicket</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Library QR Code Generator (JavaScript) -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         .ticket-card {
             transition: all 0.3s ease;
@@ -85,9 +87,6 @@ function safe($data) {
         .ticket-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 20px 30px -12px rgba(0,102,204,0.2);
-        }
-        .status-checkin {
-            transition: all 0.2s ease;
         }
         @media print {
             .no-print {
@@ -99,27 +98,37 @@ function safe($data) {
                 box-shadow: none;
                 border: 1px solid #ddd;
             }
+            .qr-code-container {
+                display: block !important;
+            }
         }
-        .qr-placeholder {
-            background: repeating-linear-gradient(45deg, #333, #333 10px, #555 10px, #555 20px);
+        .qr-code-container canvas,
+        .qr-code-container img {
+            width: 80px !important;
+            height: 80px !important;
+        }
+        .modal-qr canvas,
+        .modal-qr img {
+            width: 160px !important;
+            height: 160px !important;
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-soft-blue to-white min-h-screen">
+<body class="bg-gradient-to-br from-blue-50 to-white min-h-screen">
     
     <!-- Navbar -->
     <nav class="bg-white shadow-md sticky top-0 z-50 no-print">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-2">
-                <i class="fas fa-ticket-alt text-accent-blue text-2xl"></i>
-                <span class="font-bold text-xl bg-gradient-to-r from-navy to-accent-blue bg-clip-text text-transparent">EventTicket</span>
+                <i class="fas fa-ticket-alt text-blue-600 text-2xl"></i>
+                <span class="font-bold text-xl text-gray-800">TiketMoo</span>
             </div>
             <div class="flex items-center space-x-4">
-                <div class="flex items-center space-x-2">
-                    <i class="fas fa-user-circle text-accent-blue text-xl"></i>
+                <!-- <div class="flex items-center space-x-2">
+                    <i class="fas fa-user-circle text-blue-600 text-xl"></i>
                     <span class="hidden md:inline text-gray-600"><?= safe($_SESSION['nama']) ?></span>
-                </div>
-                <a href="dashboard.php" class="text-gray-600 hover:text-accent-blue transition">
+                </div> -->
+                <a href="dashboard.php" class="text-gray-600 hover:text-blue-600 transition">
                     <i class="fas fa-home"></i> Dashboard
                 </a>
                 <a href="../auth/logout.php" class="text-gray-600 hover:text-red-500 transition">
@@ -132,10 +141,6 @@ function safe($data) {
     <div class="container mx-auto px-4 py-8 max-w-6xl">
         <!-- Header -->
         <div class="mb-8">
-            <h1 class="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-3">
-                <i class="fas fa-ticket-alt text-accent-blue"></i>
-                Tiket Saya
-            </h1>
             <p class="text-gray-500 mt-2">Semua tiket yang sudah Anda pesan</p>
         </div>
         
@@ -145,7 +150,7 @@ function safe($data) {
             <i class="fas fa-ticket-alt text-6xl text-gray-300 mb-4"></i>
             <h3 class="text-xl font-semibold text-gray-700 mb-2">Belum Ada Tiket</h3>
             <p class="text-gray-500 mb-6">Anda belum memiliki tiket. Yuk, pesan tiket event favorit Anda!</p>
-            <a href="dashboard.php" class="bg-accent-blue text-white px-6 py-3 rounded-xl font-semibold hover:bg-accent-hover transition inline-flex items-center gap-2">
+            <a href="dashboard.php" class="bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-blue-700 transition inline-flex items-center gap-2">
                 <i class="fas fa-search"></i> Cari Event
             </a>
         </div>
@@ -156,7 +161,7 @@ function safe($data) {
             <?php foreach($orders as $order): ?>
             <div class="bg-white rounded-2xl shadow-md overflow-hidden">
                 <!-- Order Header -->
-                <div class="bg-gradient-to-r from-navy to-accent-blue px-6 py-4">
+                <div class="bg-gradient-to-r from-gray-800 to-blue-700 px-6 py-4">
                     <div class="flex flex-wrap justify-between items-center">
                         <div>
                             <p class="text-blue-100 text-sm">Nomor Pesanan</p>
@@ -185,8 +190,8 @@ function safe($data) {
                         <div class="flex-1">
                             <h3 class="font-bold text-xl text-gray-800"><?= safe($order['nama_event']) ?></h3>
                             <div class="flex flex-wrap gap-4 mt-1 text-sm text-gray-500">
-                                <span><i class="fas fa-calendar-alt text-accent-blue mr-1"></i> <?= date('l, d F Y', strtotime($order['event_tanggal'])) ?></span>
-                                <span><i class="fas fa-map-marker-alt text-accent-blue mr-1"></i> <?= safe($order['nama_venue']) ?></span>
+                                <span><i class="fas fa-calendar-alt text-blue-600 mr-1"></i> <?= date('l, d F Y', strtotime($order['event_tanggal'])) ?></span>
+                                <span><i class="fas fa-map-marker-alt text-blue-600 mr-1"></i> <?= safe($order['nama_venue']) ?></span>
                             </div>
                             <p class="text-xs text-gray-400 mt-1"><?= safe($order['venue_alamat']) ?></p>
                         </div>
@@ -196,16 +201,18 @@ function safe($data) {
                 <!-- Tickets -->
                 <div class="p-6">
                     <h4 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                        <i class="fas fa-qrcode text-accent-blue"></i>
+                        <i class="fas fa-qrcode text-blue-600"></i>
                         Daftar Tiket
                     </h4>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <?php foreach($order['tickets'] as $ticket): ?>
+                        <?php foreach($order['tickets'] as $index => $ticket): 
+                            $qr_id = 'qr_' . $ticket['kode_tiket'];
+                        ?>
                         <div class="ticket-card border border-gray-200 rounded-xl p-4 hover:shadow-lg transition">
                             <div class="flex justify-between items-start mb-3">
                                 <div>
                                     <div class="flex items-center gap-2">
-                                        <span class="px-2 py-1 bg-soft-blue text-accent-blue rounded-lg text-xs font-semibold">
+                                        <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold">
                                             <?= safe($ticket['nama_tiket']) ?>
                                         </span>
                                         <?php if($ticket['status_checkin'] == 'sudah'): ?>
@@ -219,7 +226,7 @@ function safe($data) {
                                         <?php endif; ?>
                                     </div>
                                     <p class="font-mono text-sm text-gray-600 mt-2">
-                                        <i class="fas fa-barcode text-accent-blue mr-1"></i>
+                                        <i class="fas fa-barcode text-blue-600 mr-1"></i>
                                         <?= safe($ticket['kode_tiket']) ?>
                                     </p>
                                 </div>
@@ -229,32 +236,39 @@ function safe($data) {
                                 </div>
                             </div>
                             
-                            <!-- QR Code Placeholder (simulasi) -->
+                            <!-- QR Code menggunakan JavaScript -->
                             <div class="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-10 h-10 bg-gray-800 rounded flex items-center justify-center">
-                                        <i class="fas fa-qrcode text-white text-xl"></i>
-                                    </div>
-                                    <span class="text-xs text-gray-400">Scan untuk check-in</span>
+                                <div class="flex items-center gap-3">
+                                    <div id="<?= $qr_id ?>" class="qr-code-container"></div>
+                                    <span class="text-xs text-gray-500">Scan QR Code untuk check-in</span>
                                 </div>
-                                <button onclick="showTicketDetail('<?= $ticket['kode_tiket'] ?>', '<?= safe($ticket['nama_tiket']) ?>', '<?= safe($order['nama_event']) ?>', '<?= $order['event_tanggal'] ?>', '<?= safe($order['nama_venue']) ?>')" 
-                                        class="text-accent-blue text-sm hover:underline flex items-center gap-1 no-print">
+                                <button onclick="showTicketDetail('<?= $ticket['kode_tiket'] ?>', '<?= safe($ticket['nama_tiket']) ?>', '<?= safe($order['nama_event']) ?>', '<?= $order['event_tanggal'] ?>', '<?= safe($order['nama_venue']) ?>', '<?= $qr_id ?>')" 
+                                        class="text-blue-600 text-sm hover:underline flex items-center gap-1 no-print">
                                     <i class="fas fa-eye"></i> Detail
                                 </button>
                             </div>
                         </div>
+                        
+                        <script>
+                            // Generate QR Code untuk setiap tiket
+                            new QRCode(document.getElementById("<?= $qr_id ?>"), {
+                                text: "<?= 'TIKET:' . $ticket['kode_tiket'] ?>",
+                                width: 80,
+                                height: 80,
+                                colorDark: "#000000",
+                                colorLight: "#ffffff",
+                                correctLevel: QRCode.CorrectLevel.H
+                            });
+                        </script>
                         <?php endforeach; ?>
                     </div>
                 </div>
                 
                 <!-- Action Buttons -->
                 <div class="px-6 py-4 bg-gray-50 flex flex-wrap gap-3 no-print">
-                    <button onclick="printTickets('<?= $order['no_order'] ?>')" class="text-gray-600 hover:text-accent-blue transition text-sm flex items-center gap-1">
+                    <button onclick="printTickets()" class="text-gray-600 hover:text-blue-600 transition text-sm flex items-center gap-1">
                         <i class="fas fa-print"></i> Cetak Semua Tiket
                     </button>
-                    <a href="detail_event.php?id=<?= $order['id_event'] ?? '' ?>" class="text-accent-blue hover:underline text-sm flex items-center gap-1">
-                        <i class="fas fa-info-circle"></i> Lihat Detail Event
-                    </a>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -267,22 +281,35 @@ function safe($data) {
         <div class="bg-white rounded-2xl max-w-md w-full mx-4 p-6" onclick="event.stopPropagation()">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-gray-800">Detail Tiket</h3>
-                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
             </div>
             <div id="modalContent">
                 <!-- Content will be filled by JavaScript -->
             </div>
-            <button onclick="printSingleTicket()" class="mt-4 w-full bg-accent-blue text-white py-2 rounded-lg font-semibold hover:bg-accent-hover transition flex items-center justify-center gap-2">
+            <button onclick="printSingleTicket()" class="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition flex items-center justify-center gap-2">
                 <i class="fas fa-print"></i> Cetak Tiket
             </button>
         </div>
     </div>
     
     <script>
-        let currentTicket = null;
+        let currentTicketData = null;
         
-        function showTicketDetail(kode, namaTiket, namaEvent, tanggal, venue) {
-            currentTicket = { kode, namaTiket, namaEvent, tanggal, venue };
+        function showTicketDetail(kode, namaTiket, namaEvent, tanggal, venue, qrId) {
+            // Ambil elemen QR Code yang sudah ada
+            const qrElement = document.getElementById(qrId);
+            let qrHtml = '';
+            
+            if (qrElement) {
+                // Clone QR Code yang sudah ada
+                const qrClone = qrElement.cloneNode(true);
+                qrHtml = qrClone.outerHTML;
+            } else {
+                qrHtml = `<div id="modal-qr-${kode}" class="modal-qr"></div>`;
+            }
+            
+            currentTicketData = { kode, namaTiket, namaEvent, tanggal, venue, qrId };
+            
             const modalContent = document.getElementById('modalContent');
             modalContent.innerHTML = `
                 <div class="space-y-3">
@@ -308,12 +335,42 @@ function safe($data) {
                     </div>
                 </div>
                 <div class="mt-4 p-4 bg-gray-100 rounded-lg text-center">
-                    <div class="w-32 h-32 bg-white mx-auto rounded flex items-center justify-center">
-                        <i class="fas fa-qrcode text-6xl text-gray-800"></i>
+                    <div class="flex justify-center mb-2" id="modal-qr-container">
+                        ${qrHtml}
                     </div>
                     <p class="text-xs text-gray-500 mt-2">Scan QR Code untuk check-in</p>
                 </div>
             `;
+            
+            // Jika QR Code belum ada di modal, buat baru
+            if (!qrElement && document.getElementById(`modal-qr-${kode}`)) {
+                new QRCode(document.getElementById(`modal-qr-${kode}`), {
+                    text: "TIKET:" + kode,
+                    width: 160,
+                    height: 160,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            } else if (qrElement && !document.querySelector('#modal-qr-container canvas')) {
+                // Clone dan resize QR Code untuk modal
+                const modalContainer = document.getElementById('modal-qr-container');
+                if (modalContainer) {
+                    const newQRDiv = document.createElement('div');
+                    newQRDiv.id = `modal-qr-new-${kode}`;
+                    modalContainer.innerHTML = '';
+                    modalContainer.appendChild(newQRDiv);
+                    new QRCode(newQRDiv, {
+                        text: "TIKET:" + kode,
+                        width: 160,
+                        height: 160,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                }
+            }
+            
             document.getElementById('ticketModal').classList.remove('hidden');
             document.getElementById('ticketModal').classList.add('flex');
         }
@@ -321,17 +378,18 @@ function safe($data) {
         function closeModal() {
             document.getElementById('ticketModal').classList.add('hidden');
             document.getElementById('ticketModal').classList.remove('flex');
-            currentTicket = null;
+            currentTicketData = null;
         }
         
         function printSingleTicket() {
-            if (currentTicket) {
+            if (currentTicketData) {
                 const printWindow = window.open('', '_blank');
                 printWindow.document.write(`
                     <html>
                     <head>
-                        <title>Cetak Tiket - ${currentTicket.kode}</title>
+                        <title>Cetak Tiket - ${currentTicketData.kode}</title>
                         <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+                        <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
                     </head>
                     <body class="p-8">
                         <div class="max-w-md mx-auto border rounded-lg p-6">
@@ -340,20 +398,29 @@ function safe($data) {
                                 <p class="text-sm text-gray-600">Tiket Event</p>
                             </div>
                             <div class="border-t pt-4">
-                                <p><strong>Kode Tiket:</strong> ${currentTicket.kode}</p>
-                                <p><strong>Jenis Tiket:</strong> ${currentTicket.namaTiket}</p>
-                                <p><strong>Event:</strong> ${currentTicket.namaEvent}</p>
-                                <p><strong>Tanggal:</strong> ${currentTicket.tanggal}</p>
-                                <p><strong>Venue:</strong> ${currentTicket.venue}</p>
+                                <p><strong>Kode Tiket:</strong> ${currentTicketData.kode}</p>
+                                <p><strong>Jenis Tiket:</strong> ${currentTicketData.namaTiket}</p>
+                                <p><strong>Event:</strong> ${currentTicketData.namaEvent}</p>
+                                <p><strong>Tanggal:</strong> ${currentTicketData.tanggal}</p>
+                                <p><strong>Venue:</strong> ${currentTicketData.venue}</p>
                             </div>
                             <div class="text-center mt-6">
-                                <div class="inline-block p-4 bg-gray-100 rounded">
-                                    <i class="fas fa-qrcode text-4xl"></i>
-                                </div>
+                                <div id="print-qr" class="flex justify-center"></div>
                             </div>
                             <p class="text-center text-xs text-gray-500 mt-4">Scan QR Code untuk check-in</p>
                         </div>
-                        <script>window.print();<\/script>
+                        <script>
+                            new QRCode(document.getElementById("print-qr"), {
+                                text: "TIKET:${currentTicketData.kode}",
+                                width: 150,
+                                height: 150,
+                                colorDark: "#000000",
+                                colorLight: "#ffffff"
+                            });
+                            setTimeout(() => {
+                                window.print();
+                            }, 500);
+                        <\/script>
                     </body>
                     </html>
                 `);
@@ -361,7 +428,7 @@ function safe($data) {
             }
         }
         
-        function printTickets(orderNo) {
+        function printTickets() {
             window.print();
         }
     </script>
