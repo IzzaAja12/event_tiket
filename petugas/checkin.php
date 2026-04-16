@@ -308,9 +308,9 @@ $sudah_checkins = mysqli_query($conn, "
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
         }
-        @keyframes confetti {
-            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(0,102,204,0.2); }
+            50% { box-shadow: 0 0 20px rgba(0,102,204,0.4); }
         }
         #reader {
             width: 100%;
@@ -332,6 +332,13 @@ $sudah_checkins = mysqli_query($conn, "
         .modal-success {
             animation: bounce 0.5s ease-out;
         }
+        .guide-card {
+            transition: all 0.3s ease;
+        }
+        .guide-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(0,102,204,0.15);
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-soft-blue to-white min-h-screen">
@@ -341,8 +348,8 @@ $sudah_checkins = mysqli_query($conn, "
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center space-x-2">
                 <i class="fas fa-ticket-alt text-accent-blue text-2xl animate-pulse-slow"></i>
-                <span class="font-bold text-xl bg-gradient-to-r from-navy to-accent-blue bg-clip-text text-transparent">EventTicket</span>
-                <span class="text-xs bg-accent-blue text-white px-2 py-1 rounded-full ml-2">Petugas</span>
+                <span class="font-bold text-xl bg-gradient-to-r from-navy to-accent-blue bg-clip-text text-transparent">TiketMoo</span>
+
             </div>
             <div class="flex items-center space-x-4">
                 <div class="flex items-center space-x-2">
@@ -668,22 +675,80 @@ $sudah_checkins = mysqli_query($conn, "
             </div>
         </div>
 
-        <!-- Panduan Penggunaan -->
-        <div class="mt-8 bg-blue-50 rounded-xl p-4 animate-[slideIn_0.8s_ease-out]">
-            <div class="flex items-start gap-3">
-                <i class="fas fa-info-circle text-accent-blue text-xl mt-0.5"></i>
-                <div>
-                    <p class="font-semibold text-gray-700">Panduan Penggunaan:</p>
-                    <ul class="text-sm text-gray-600 mt-1 space-y-1">
-                        <li>• <i class="fas fa-camera"></i> <strong>Scan QR Code:</strong> Arahkan kamera ke QR Code tiket untuk check-in cepat</li>
-                        <li>• <i class="fas fa-keyboard"></i> <strong>Input Manual:</strong> Masukkan kode tiket jika scan tidak berfungsi</li>
-                        <li>• <i class="fas fa-clock"></i> <strong>Belum Check-in:</strong> Lihat semua tiket yang belum di-check-in di tab ini</li>
-                        <li>• <i class="fas fa-check-circle"></i> <strong>Sudah Check-in:</strong> Lihat riwayat check-in yang sudah dilakukan</li>
-                        <li>• <i class="fas fa-search"></i> Gunakan fitur search untuk mencari tiket tertentu</li>
-                        <li>• <i class="fas fa-bolt"></i> Klik tombol <strong>Check-in</strong> di tabel untuk check-in cepat tanpa scan ulang</li>
-                    </ul>
-                </div>
+        <!-- Panduan Penggunaan - VERSI MODERN & RAPI -->
+        <div class="mt-10 animate-[slideIn_0.8s_ease-out]">
+            <div class="flex items-center gap-3 mb-5">
+                <div class="w-1 h-8 bg-gradient-to-b from-accent-blue to-navy rounded-full"></div>
+                <h3 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fas fa-info-circle text-accent-blue"></i>
+                    Panduan Penggunaan
+                </h3>
             </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- Card 1: Scan QR Code -->
+                <div class="guide-card bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-100 shadow-sm hover:shadow-md transition-all duration-300">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-12 h-12 bg-gradient-to-r from-accent-blue to-navy rounded-xl flex items-center justify-center shadow-md">
+                            <i class="fas fa-camera text-white text-xl"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Scan QR Code</h4>
+                            <p class="text-xs text-gray-500">Metode Cepat & Praktis</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600 leading-relaxed">
+                        Arahkan kamera ke <strong class="text-accent-blue">QR Code tiket</strong> yang tertera pada tiket fisik atau digital. 
+                        Sistem akan otomatis mendeteksi dan memproses check-in.
+                    </p>
+                    <div class="mt-3 pt-3 border-t border-blue-200">
+                        <span class="text-xs text-blue-600"><i class="fas fa-lightbulb mr-1"></i> Tips: Pastikan kamera fokus pada QR Code</span>
+                    </div>
+                </div>
+
+       
+                <!-- Card 4: Check-in Cepat -->
+                <div class="guide-card bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-5 border border-yellow-100 shadow-sm hover:shadow-md transition-all duration-300">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-12 h-12 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center shadow-md">
+                            <i class="fas fa-bolt text-white text-xl"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Check-in Cepat</h4>
+                            <p class="text-xs text-gray-500">Tombol Aksi Langsung</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600 leading-relaxed">
+                        Klik tombol <strong class="text-orange-600">"Check-in"</strong> pada tabel untuk memproses tiket tanpa perlu scan ulang. 
+                        Dilengkapi konfirmasi sebelum diproses.
+                    </p>
+                    <div class="mt-3 pt-3 border-t border-yellow-200">
+                        <span class="text-xs text-orange-600"><i class="fas fa-lightbulb mr-1"></i> Tips: Gunakan untuk tiket yang sudah discan sebelumnya</span>
+                    </div>
+                </div>
+
+    
+                <!-- Card 6: Notifikasi & Informasi -->
+                <!-- <div class="guide-card bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl p-5 border border-red-100 shadow-sm hover:shadow-md transition-all duration-300">
+                    <div class="flex items-center gap-3 mb-3">
+                        <div class="w-12 h-12 bg-gradient-to-r from-red-500 to-rose-500 rounded-xl flex items-center justify-center shadow-md">
+                            <i class="fas fa-bell text-white text-xl"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-gray-800">Notifikasi</h4>
+                            <p class="text-xs text-gray-500">Informasi Real-time</p>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-600 leading-relaxed">
+                        Setiap check-in akan menampilkan <strong class="text-rose-600">notifikasi modal</strong> dengan detail tiket. 
+                        Status berhasil atau gagal akan ditampilkan dengan jelas.
+                    </p>
+                    <div class="mt-3 pt-3 border-t border-red-200">
+                        <span class="text-xs text-red-600"><i class="fas fa-lightbulb mr-1"></i> Tips: Perhatikan notifikasi untuk konfirmasi check-in</span>
+                    </div>
+                </div>
+            </div> -->
+
         </div>
     </div>
 

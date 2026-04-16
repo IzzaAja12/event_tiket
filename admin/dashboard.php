@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // Enable error reporting untuk debugging (hapus saat production)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
@@ -170,12 +170,15 @@ if ($query_pendapatan) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard | Event Ticket</title>
+    <link rel="icon" href="logo.png" type="image/png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <!-- Chart.js untuk Grafik -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- SheetJS untuk Export Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <!-- html2pdf untuk Export PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -235,8 +238,25 @@ if ($query_pendapatan) {
             transform: translateY(-2px);
         }
         canvas {
-            max-height: 200px !important;
+            max-height: 180px !important;
             width: 100% !important;
+        }
+        /* Style untuk PDF */
+        .pdf-container {
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .pdf-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .pdf-table th, .pdf-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .pdf-table th {
+            background-color: #f2f2f2;
         }
     </style>
 </head>
@@ -325,7 +345,7 @@ if ($query_pendapatan) {
                         <i class="fas fa-chart-line text-accent-blue mr-1"></i> Event per Bulan
                     </h3>
                 </div>
-                <canvas id="eventChart" style="height: 180px !important; width: 100% !important;"></canvas>
+                <canvas id="eventChart" style="height: 160px !important; width: 100% !important;"></canvas>
             </div>
 
             <!-- Grafik Status Tiket -->
@@ -335,8 +355,8 @@ if ($query_pendapatan) {
                         <i class="fas fa-chart-pie text-accent-blue mr-1"></i> Status Tiket
                     </h3>
                 </div>
-                <canvas id="ticketStatusChart" style="height: 140px !important; width: 100% !important;"></canvas>
-                <div class="mt-3 flex justify-center gap-4 text-xs">
+                <canvas id="ticketStatusChart" style="height: 130px !important; width: 100% !important;"></canvas>
+                <div class="mt-2 flex justify-center gap-4 text-xs">
                     <div class="flex items-center gap-1">
                         <div class="w-3 h-3 rounded-full bg-green-500"></div>
                         <span>Terjual: <?= number_format($total_terjual, 0, ',', '.') ?></span>
@@ -355,7 +375,7 @@ if ($query_pendapatan) {
                         <i class="fas fa-chart-bar text-accent-blue mr-1"></i> Event per Venue
                     </h3>
                 </div>
-                <canvas id="venueChart" style="height: 180px !important; width: 100% !important;"></canvas>
+                <canvas id="venueChart" style="height: 160px !important; width: 100% !important;"></canvas>
             </div>
         </div>
 
@@ -405,13 +425,14 @@ if ($query_pendapatan) {
                         <button onclick="exportToExcel()" class="btn-export bg-green-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-green-700 transition">
                             <i class="fas fa-file-excel"></i> Excel
                         </button>
-                        <button onclick="exportToCSV()" class="btn-export bg-blue-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-blue-700 transition">
-                            <i class="fas fa-file-csv"></i> CSV
+                  
+                        <button onclick="exportToPDF()" class="btn-export bg-red-600 text-white px-3 py-1.5 text-sm rounded-lg hover:bg-red-700 transition">
+                            <i class="fas fa-file-pdf"></i> PDF
                         </button>
                     </div>
                 </div>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto" id="tableEventContainer">
                 <table class="min-w-full divide-y divide-gray-200" id="eventTable">
                     <thead class="bg-gray-50">
                         <tr>
@@ -503,6 +524,65 @@ if ($query_pendapatan) {
         </div>
     </div>
 
+    <!-- Hidden div untuk export PDF -->
+    <div id="pdfContent" style="display: none;">
+        <div class="pdf-container">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h2 style="color: #0a2540;">Laporan Data Event</h2>
+                <p style="color: #666;">Event Ticket System</p>
+                <p style="color: #999; font-size: 12px;">Tanggal: <?= date('d F Y H:i:s') ?></p>
+                <hr style="margin: 10px 0;">
+            </div>
+            <table class="pdf-table">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Event</th>
+                        <th>Venue</th>
+                        <th>Tanggal</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                    // Ambil semua data untuk PDF (tanpa pagination)
+                    $query_pdf = mysqli_query($conn, "
+                        SELECT event.*, venue.nama_venue 
+                        FROM event 
+                        LEFT JOIN venue ON event.id_venue = venue.id_venue 
+                        $search_condition
+                        ORDER BY event.tanggal DESC
+                    ");
+                    $no_pdf = 1;
+                    while($event_pdf = mysqli_fetch_assoc($query_pdf)) {
+                        $today = date('Y-m-d');
+                        $event_date = $event_pdf['tanggal'] ?? '';
+                        if($event_date > $today) {
+                            $status_pdf = 'Akan Datang';
+                        } elseif($event_date == $today) {
+                            $status_pdf = 'Hari Ini';
+                        } else {
+                            $status_pdf = 'Selesai';
+                        }
+                        echo "<tr>";
+                        echo "<td>{$no_pdf}</td>";
+                        echo "<td>" . htmlspecialchars($event_pdf['nama_event'] ?? '-') . "</td>";
+                        echo "<td>" . htmlspecialchars($event_pdf['nama_venue'] ?? '-') . "</td>";
+                        echo "<td>" . (isset($event_pdf['tanggal']) ? date('d M Y', strtotime($event_pdf['tanggal'])) : '-') . "</td>";
+                        echo "<td>{$status_pdf}</td>";
+                        echo "</tr>";
+                        $no_pdf++;
+                    }
+                    ?>
+                </tbody>
+            </table>
+            <div style="margin-top: 20px; text-align: center; font-size: 10px; color: #999;">
+                <hr>
+                <p>© <?= date('Y') ?> Event Ticket System - Laporan generated on <?= date('d F Y H:i:s') ?></p>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Data dari PHP untuk grafik
         const bulanLabels = <?= json_encode($bulan_labels) ?>;
@@ -512,7 +592,7 @@ if ($query_pendapatan) {
         const topVenuesLabels = <?= json_encode($top_venues_labels) ?>;
         const topVenuesData = <?= json_encode($top_venues_data) ?>;
 
-        // Grafik Event per Bulan (Line Chart) - Ukuran lebih kecil
+        // Grafik Event per Bulan (Line Chart)
         const eventCtx = document.getElementById('eventChart').getContext('2d');
         new Chart(eventCtx, {
             type: 'line',
@@ -547,7 +627,7 @@ if ($query_pendapatan) {
             }
         });
 
-        // Grafik Status Tiket (Doughnut Chart) - Ukuran lebih kecil
+        // Grafik Status Tiket (Doughnut Chart)
         const ticketStatusCtx = document.getElementById('ticketStatusChart').getContext('2d');
         new Chart(ticketStatusCtx, {
             type: 'doughnut',
@@ -635,6 +715,19 @@ if ($query_pendapatan) {
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+        }
+
+        // Export ke PDF
+        function exportToPDF() {
+            const element = document.getElementById('pdfContent');
+            const opt = {
+                margin: [0.5, 0.5, 0.5, 0.5],
+                filename: `Data_Event_<?= date('Y-m-d') ?>.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, letterRendering: true, useCORS: true },
+                jsPDF: { unit: 'in', format: 'a4', orientation: 'landscape' }
+            };
+            html2pdf().set(opt).from(element).save();
         }
 
         // Search dengan enter
