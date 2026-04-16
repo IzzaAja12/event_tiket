@@ -433,39 +433,7 @@ $sudah_checkins = mysqli_query($conn, "
             </div>
         </div>
 
-        <!-- Input Manual Section -->
-        <div class="bg-white rounded-2xl shadow-md overflow-hidden mb-8 animate-[slideIn_0.6s_ease-out]">
-            <div class="bg-gradient-to-r from-gray-700 to-gray-800 px-6 py-4">
-                <h2 class="text-white font-semibold">
-                    <i class="fas fa-keyboard mr-2"></i> Input Kode Tiket Manual
-                </h2>
-                <p class="text-gray-300 text-sm mt-1">Masukkan kode tiket secara manual jika scan tidak berfungsi</p>
-            </div>
-            <div class="p-6">
-                <form method="POST" id="manualForm" class="flex flex-col md:flex-row gap-4">
-                    <div class="flex-1">
-                        <div class="relative">
-                            <i class="fas fa-qrcode absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                            <input 
-                                type="text" 
-                                name="kode_manual" 
-                                id="kodeManual"
-                                class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-blue focus:border-transparent text-lg font-mono"
-                                placeholder="Contoh: TKT-20260415-0265B8-01"
-                                autocomplete="off"
-                            >
-                        </div>
-                    </div>
-                    <button 
-                        type="submit" 
-                        name="checkin_manual"
-                        class="bg-accent-blue text-white px-6 py-3 rounded-lg font-semibold hover:bg-accent-hover transition transform hover:scale-[1.02] flex items-center justify-center gap-2"
-                    >
-                        <i class="fas fa-check-circle"></i> Check-in
-                    </button>
-                </form>
-            </div>
-        </div>
+
 
         <!-- Tabel Data Tiket (Tab) -->
         <div class="bg-white rounded-2xl shadow-md overflow-hidden animate-[slideIn_0.7s_ease-out]">
