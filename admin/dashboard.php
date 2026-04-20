@@ -714,7 +714,7 @@ if ($query_pendapatan) {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            URL.revokeObjectURL(url);     
         }
 
         // Export ke PDF
