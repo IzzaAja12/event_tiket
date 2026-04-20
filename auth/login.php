@@ -1,3 +1,6 @@
+<?php
+session_start();
+?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -110,11 +113,18 @@
             <!-- Left Side - Branding -->
             <div class="bg-gradient-to-br from-navy to-accent-blue p-8 md:p-10 flex flex-col justify-between">
                 <div class="animate-[slideInLeft_0.5s_ease-out]">
-                    <div class="flex items-center gap-2 mb-10">
-                        <div class="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center brand-icon">
-                            <i class="fas fa-ticket-alt text-white text-xl"></i>
+                    <div class="flex items-center justify-between mb-10">
+                        <div class="flex items-center gap-2">
+                            <div class="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center brand-icon">
+                                <i class="fas fa-ticket-alt text-white text-xl"></i>
+                            </div>
+                            <span class="text-white font-bold text-xl tracking-tight">TiketMoo</span>
                         </div>
-                        <span class="text-white font-bold text-xl tracking-tight">TiketMoo</span>
+                        <!-- Tombol Kembali ke Beranda -->
+                        <a href="../home.php" class="text-white/70 hover:text-white transition text-sm flex items-center gap-1">
+                            <i class="fas fa-arrow-left text-xs"></i>
+                            <span>Beranda</span>
+                        </a>
                     </div>
                     
                     <div class="space-y-4">

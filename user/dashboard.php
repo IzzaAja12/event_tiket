@@ -412,13 +412,7 @@ function safe($data) {
                 <p class="text-sm text-gray-600">Menampilkan hasil pencarian untuk: <strong>"<?= htmlspecialchars($search) ?>"</strong> - Ditemukan <?= $total_data ?> event</p>
             </div>
             <?php endif; ?>
-            
-            <!-- Info Urutan Event -->
-            <div class="mb-4 p-3 bg-gradient-to-r from-accent-blue/10 to-navy/10 rounded-xl flex items-center gap-2">
-                <i class="fas fa-sort-amount-up text-accent-blue"></i>
-                <p class="text-sm text-gray-600">Event diurutkan dari <strong>yang paling dekat</strong> (hari ini) ke <strong>yang paling jauh</strong> (mendatang)</p>
-            </div>
-            
+    
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
                 <?php 
                 if($query_event && mysqli_num_rows($query_event) > 0) {
