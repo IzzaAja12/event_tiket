@@ -15,6 +15,31 @@ if(!isset($_SESSION['nama'])) {
 
 $id_user = $_SESSION['id_user'] ?? 1;
 
+// Proses Cancel Tiket
+if(isset($_POST['cancel_ticket']) && isset($_POST['kode_tiket'])) {
+    $kode_tiket = mysqli_real_escape_string($conn, $_POST['kode_tiket']);
+    
+    // Cek status tiket sebelum cancel (hanya bisa cancel jika belum check-in)
+    $check_query = mysqli_query($conn, "SELECT status_checkin FROM attendee WHERE kode_tiket = '$kode_tiket'");
+    $check_data = mysqli_fetch_assoc($check_query);
+    
+    if($check_data && $check_data['status_checkin'] == 'belum') {
+        // Hapus tiket dari database
+        $delete_query = mysqli_query($conn, "DELETE FROM attendee WHERE kode_tiket = '$kode_tiket'");
+        
+        if($delete_query) {
+            $_SESSION['success_message'] = "Tiket berhasil dibatalkan!";
+        } else {
+            $_SESSION['error_message'] = "Gagal membatalkan tiket. Silakan coba lagi.";
+        }
+    } else {
+        $_SESSION['error_message'] = "Tiket tidak dapat dibatalkan karena sudah di-check-in!";
+    }
+    
+    header("Location: my_tickets.php");
+    exit;
+}
+
 // Ambil semua tiket yang sudah dibeli user
 $query_tickets = mysqli_query($conn, "
     SELECT 
@@ -74,11 +99,13 @@ function safe($data) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tiket Saya | EventTicket</title>
+    <title>Tiket Saya | TiketMoo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <!-- Library QR Code Generator (JavaScript) -->
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         .ticket-card {
             transition: all 0.3s ease;
@@ -112,6 +139,12 @@ function safe($data) {
             width: 160px !important;
             height: 160px !important;
         }
+        .btn-cancel {
+            transition: all 0.3s ease;
+        }
+        .btn-cancel:hover {
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-white min-h-screen">
@@ -124,10 +157,6 @@ function safe($data) {
                 <span class="font-bold text-xl text-gray-800">TiketMoo</span>
             </div>
             <div class="flex items-center space-x-4">
-                <!-- <div class="flex items-center space-x-2">
-                    <i class="fas fa-user-circle text-blue-600 text-xl"></i>
-                    <span class="hidden md:inline text-gray-600"><?= safe($_SESSION['nama']) ?></span>
-                </div> -->
                 <a href="dashboard.php" class="text-gray-600 hover:text-blue-600 transition">
                     <i class="fas fa-home"></i> Dashboard
                 </a>
@@ -141,8 +170,37 @@ function safe($data) {
     <div class="container mx-auto px-4 py-8 max-w-6xl">
         <!-- Header -->
         <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 flex items-center gap-3">
+                <i class="fas fa-ticket-alt text-blue-600"></i>
+                Tiket Saya
+            </h1>
             <p class="text-gray-500 mt-2">Semua tiket yang sudah Anda pesan</p>
         </div>
+        
+        <!-- Alert Messages -->
+        <?php if(isset($_SESSION['success_message'])): ?>
+        <script>
+            Swal.fire({
+                icon: 'success',
+                title: 'Berhasil!',
+                text: '<?= $_SESSION['success_message'] ?>',
+                timer: 3000,
+                showConfirmButton: false
+            });
+        </script>
+        <?php unset($_SESSION['success_message']); endif; ?>
+        
+        <?php if(isset($_SESSION['error_message'])): ?>
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal!',
+                text: '<?= $_SESSION['error_message'] ?>',
+                timer: 3000,
+                showConfirmButton: false
+            });
+        </script>
+        <?php unset($_SESSION['error_message']); endif; ?>
         
         <?php if(empty($orders)): ?>
         <!-- Empty State -->
@@ -207,11 +265,14 @@ function safe($data) {
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <?php foreach($order['tickets'] as $index => $ticket): 
                             $qr_id = 'qr_' . $ticket['kode_tiket'];
+                            $event_date = strtotime($order['event_tanggal']);
+                            $current_date = time();
+                            $is_event_passed = $event_date < $current_date;
                         ?>
                         <div class="ticket-card border border-gray-200 rounded-xl p-4 hover:shadow-lg transition">
                             <div class="flex justify-between items-start mb-3">
                                 <div>
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 flex-wrap">
                                         <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold">
                                             <?= safe($ticket['nama_tiket']) ?>
                                         </span>
@@ -222,6 +283,12 @@ function safe($data) {
                                         <?php else: ?>
                                         <span class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-lg text-xs font-semibold">
                                             <i class="fas fa-clock"></i> Belum Check-in
+                                        </span>
+                                        <?php endif; ?>
+                                        
+                                        <?php if($is_event_passed && $ticket['status_checkin'] == 'belum'): ?>
+                                        <span class="px-2 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-semibold">
+                                            <i class="fas fa-exclamation-circle"></i> Event Telah Lewat
                                         </span>
                                         <?php endif; ?>
                                     </div>
@@ -242,10 +309,20 @@ function safe($data) {
                                     <div id="<?= $qr_id ?>" class="qr-code-container"></div>
                                     <span class="text-xs text-gray-500">Scan QR Code untuk check-in</span>
                                 </div>
-                                <button onclick="showTicketDetail('<?= $ticket['kode_tiket'] ?>', '<?= safe($ticket['nama_tiket']) ?>', '<?= safe($order['nama_event']) ?>', '<?= $order['event_tanggal'] ?>', '<?= safe($order['nama_venue']) ?>', '<?= $qr_id ?>')" 
-                                        class="text-blue-600 text-sm hover:underline flex items-center gap-1 no-print">
-                                    <i class="fas fa-eye"></i> Detail
-                                </button>
+                                <div class="flex gap-2">
+                                    <button onclick="showTicketDetail('<?= $ticket['kode_tiket'] ?>', '<?= safe($ticket['nama_tiket']) ?>', '<?= safe($order['nama_event']) ?>', '<?= $order['event_tanggal'] ?>', '<?= safe($order['nama_venue']) ?>', '<?= $qr_id ?>')" 
+                                            class="text-blue-600 text-sm hover:underline flex items-center gap-1 no-print">
+                                        <i class="fas fa-eye"></i> Detail
+                                    </button>
+                                    
+                                    <!-- Tombol Cancel (hanya untuk tiket yang belum check-in dan event belum lewat) -->
+                                    <?php if($ticket['status_checkin'] == 'belum' && !$is_event_passed): ?>
+                                    <button onclick="confirmCancel('<?= $ticket['kode_tiket'] ?>', '<?= safe($ticket['nama_tiket']) ?>', '<?= safe($order['nama_event']) ?>')" 
+                                            class="text-red-600 text-sm hover:underline flex items-center gap-1 btn-cancel no-print">
+                                        <i class="fas fa-times-circle"></i> Cancel
+                                    </button>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         </div>
                         
@@ -292,8 +369,34 @@ function safe($data) {
         </div>
     </div>
     
+    <!-- Form Cancel Tiket (Hidden) -->
+    <form id="cancelForm" method="POST" action="" class="hidden">
+        <input type="hidden" name="cancel_ticket" value="1">
+        <input type="hidden" name="kode_tiket" id="cancel_kode_tiket">
+    </form>
+    
     <script>
         let currentTicketData = null;
+        
+        function confirmCancel(kodeTiket, namaTiket, namaEvent) {
+            Swal.fire({
+                title: 'Batalkan Tiket?',
+                html: `Apakah Anda yakin ingin membatalkan tiket:<br><strong>${namaTiket}</strong><br>untuk event<br><strong>${namaEvent}</strong>?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'Ya, Batalkan!',
+                cancelButtonText: 'Tidak, Kembali',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Set kode tiket dan submit form
+                    document.getElementById('cancel_kode_tiket').value = kodeTiket;
+                    document.getElementById('cancelForm').submit();
+                }
+            });
+        }
         
         function showTicketDetail(kode, namaTiket, namaEvent, tanggal, venue, qrId) {
             // Ambil elemen QR Code yang sudah ada
@@ -394,7 +497,7 @@ function safe($data) {
                     <body class="p-8">
                         <div class="max-w-md mx-auto border rounded-lg p-6">
                             <div class="text-center mb-4">
-                                <h2 class="text-xl font-bold">EventTicket</h2>
+                                <h2 class="text-xl font-bold">TiketMoo</h2>
                                 <p class="text-sm text-gray-600">Tiket Event</p>
                             </div>
                             <div class="border-t pt-4">

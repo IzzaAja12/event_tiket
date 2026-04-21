@@ -138,7 +138,7 @@ if (isset($_POST['checkin_qr'])) {
                 $response['data'] = $data;
             }
         } else {
-            $response['message'] = "Kode tiket tidak ditemukan!";
+            $response['message'] = "Kode tiket tidak ditemukan! Tiket mungkin telah dibatalkan oleh pengguna.";
         }
     } else {
         $response['message'] = "Kode tiket tidak valid!";
@@ -149,7 +149,7 @@ if (isset($_POST['checkin_qr'])) {
     exit;
 }
 
-// Ambil statistik check-in
+// Ambil statistik check-in (hanya tiket yang masih ada/tidak dibatalkan)
 $today = date('Y-m-d');
 $stats_today = mysqli_fetch_assoc(mysqli_query($conn, "
     SELECT COUNT(*) as total_checkin 
@@ -168,6 +168,7 @@ $stats_total = mysqli_fetch_assoc(mysqli_query($conn, "
 
 // ========================
 // PAGINATION UNTUK BELUM CHECK-IN
+// (Tiket yang belum check-in dan TIDAK dibatalkan - otomatis karena tiket yang dibatalkan sudah dihapus)
 // ========================
 $limit_belum = 10;
 $page_belum = isset($_GET['page_belum']) ? (int)$_GET['page_belum'] : 1;
@@ -202,7 +203,8 @@ $belum_checkins = mysqli_query($conn, "
            u.nama as nama_pembeli,
            o.no_order,
            od.nama_tiket,
-           od.harga
+           od.harga,
+           e.tanggal as event_tanggal
     FROM attendee a
     JOIN order_detail od ON a.id_detail = od.id_detail
     JOIN orders o ON od.id_order = o.id_order
@@ -258,6 +260,11 @@ $sudah_checkins = mysqli_query($conn, "
     ORDER BY a.waktu_checkin DESC
     LIMIT $offset_sudah, $limit_sudah
 ");
+
+// Fungsi untuk aman
+function safe($data) {
+    return htmlspecialchars($data ?? '', ENT_QUOTES, 'UTF-8');
+}
 ?>
 
 <!DOCTYPE html>
@@ -265,7 +272,7 @@ $sudah_checkins = mysqli_query($conn, "
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Check-in Tiket | Petugas | EventTicket</title>
+    <title>Check-in Tiket | Petugas | TiketMoo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <!-- HTML5 QR Code Library -->
@@ -308,10 +315,6 @@ $sudah_checkins = mysqli_query($conn, "
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
         }
-        @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 5px rgba(0,102,204,0.2); }
-            50% { box-shadow: 0 0 20px rgba(0,102,204,0.4); }
-        }
         #reader {
             width: 100%;
             max-width: 500px;
@@ -329,15 +332,16 @@ $sudah_checkins = mysqli_query($conn, "
             background-color: #e2e8f0;
             color: #64748b;
         }
-        .modal-success {
-            animation: bounce 0.5s ease-out;
-        }
         .guide-card {
             transition: all 0.3s ease;
         }
         .guide-card:hover {
             transform: translateY(-3px);
             box-shadow: 0 10px 25px -5px rgba(0,102,204,0.15);
+        }
+        .event-expired {
+            background-color: #fee2e2;
+            border-left: 4px solid #ef4444;
         }
     </style>
 </head>
@@ -349,12 +353,12 @@ $sudah_checkins = mysqli_query($conn, "
             <div class="flex items-center space-x-2">
                 <i class="fas fa-ticket-alt text-accent-blue text-2xl animate-pulse-slow"></i>
                 <span class="font-bold text-xl bg-gradient-to-r from-navy to-accent-blue bg-clip-text text-transparent">TiketMoo</span>
-
+                <span class="ml-2 text-xs bg-accent-blue text-white px-2 py-1 rounded-full">Petugas</span>
             </div>
             <div class="flex items-center space-x-4">
                 <div class="flex items-center space-x-2">
                     <i class="fas fa-user-shield text-accent-blue text-xl"></i>
-                    <span class="hidden md:inline text-gray-600"><?= htmlspecialchars($_SESSION['nama']) ?></span>
+                    <span class="hidden md:inline text-gray-600"><?= safe($_SESSION['nama']) ?></span>
                 </div>
                 <a href="../auth/logout.php" class="text-gray-600 hover:text-red-500 transition">
                     <i class="fas fa-sign-out-alt"></i> Logout
@@ -372,6 +376,11 @@ $sudah_checkins = mysqli_query($conn, "
                 Check-in Tiket
             </h1>
             <p class="text-gray-500 mt-2">Scan QR Code atau masukkan kode tiket untuk check-in pengunjung</p>
+            <!-- Info penting tentang pembatalan tiket -->
+            <div class="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-700 flex items-start gap-2">
+                <i class="fas fa-info-circle mt-0.5"></i>
+                <span>Tiket yang <strong>dibatalkan oleh pengguna</strong> akan otomatis dihapus dari sistem dan tidak dapat di-check-in.</span>
+            </div>
         </div>
 
         <!-- Statistik -->
@@ -407,11 +416,12 @@ $sudah_checkins = mysqli_query($conn, "
             <div class="bg-gradient-to-br from-purple-50 to-pink-100 rounded-xl p-4 shadow-md">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-purple-700 text-sm font-medium">Total Tiket</p>
+                        <p class="text-purple-700 text-sm font-medium">Total Tiket Aktif</p>
                         <p class="font-bold text-2xl text-purple-800"><?= number_format($stats_total['total_tiket'], 0, ',', '.') ?></p>
                     </div>
                     <i class="fas fa-ticket-alt text-4xl text-purple-600 opacity-50"></i>
                 </div>
+                <p class="text-purple-600 text-xs mt-1">Tiket yang belum dibatalkan</p>
             </div>
         </div>
 
@@ -432,8 +442,6 @@ $sudah_checkins = mysqli_query($conn, "
                 </button>
             </div>
         </div>
-
-
 
         <!-- Tabel Data Tiket (Tab) -->
         <div class="bg-white rounded-2xl shadow-md overflow-hidden animate-[slideIn_0.7s_ease-out]">
@@ -489,22 +497,37 @@ $sudah_checkins = mysqli_query($conn, "
                             <tbody class="divide-y divide-gray-200">
                                 <?php 
                                 $no_belum = $offset_belum + 1;
+                                $today_date = date('Y-m-d');
                                 while($row = mysqli_fetch_assoc($belum_checkins)): 
+                                    $is_event_expired = strtotime($row['event_tanggal']) < strtotime($today_date);
                                 ?>
-                                <tr class="hover:bg-yellow-50 transition">
+                                <tr class="hover:bg-yellow-50 transition <?= $is_event_expired ? 'event-expired' : '' ?>">
                                     <td class="px-6 py-4 text-sm text-gray-600"><?= $no_belum++ ?></td>
                                     <td class="px-6 py-4">
-                                        <code class="text-sm bg-gray-100 px-2 py-1 rounded"><?= htmlspecialchars($row['kode_tiket']) ?></code>
+                                        <code class="text-sm bg-gray-100 px-2 py-1 rounded"><?= safe($row['kode_tiket']) ?></code>
                                     </td>
-                                    <td class="px-6 py-4 text-sm font-mono text-gray-600"><?= htmlspecialchars($row['no_order']) ?></td>
-                                    <td class="px-6 py-4 text-sm font-medium text-gray-800"><?= htmlspecialchars($row['nama_event']) ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-600"><?= htmlspecialchars($row['nama_tiket']) ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-600"><?= htmlspecialchars($row['nama_pembeli']) ?></td>
+                                    <td class="px-6 py-4 text-sm font-mono text-gray-600"><?= safe($row['no_order']) ?></td>
+                                    <td class="px-6 py-4 text-sm font-medium text-gray-800">
+                                        <?= safe($row['nama_event']) ?>
+                                        <?php if($is_event_expired): ?>
+                                        <span class="ml-2 text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                                            <i class="fas fa-exclamation-circle"></i> Event Lewat
+                                        </span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-600"><?= safe($row['nama_tiket']) ?></td>
+                                    <td class="px-6 py-4 text-sm text-gray-600"><?= safe($row['nama_pembeli']) ?></td>
                                     <td class="px-6 py-4">
-                                        <button onclick="quickCheckin('<?= htmlspecialchars($row['kode_tiket']) ?>', '<?= htmlspecialchars($row['nama_event']) ?>', '<?= htmlspecialchars($row['nama_pembeli']) ?>', '<?= htmlspecialchars($row['nama_tiket']) ?>')" 
+                                        <?php if(!$is_event_expired): ?>
+                                        <button onclick="quickCheckin('<?= safe($row['kode_tiket']) ?>', '<?= safe($row['nama_event']) ?>', '<?= safe($row['nama_pembeli']) ?>', '<?= safe($row['nama_tiket']) ?>')" 
                                                 class="bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600 transition">
                                             <i class="fas fa-check-circle"></i> Check-in
                                         </button>
+                                        <?php else: ?>
+                                        <span class="text-gray-400 text-sm">
+                                            <i class="fas fa-calendar-times"></i> Event Lewat
+                                        </span>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                                 <?php endwhile; ?>
@@ -544,7 +567,7 @@ $sudah_checkins = mysqli_query($conn, "
                     <div class="text-center py-12">
                         <i class="fas fa-check-circle text-5xl text-green-300 mb-3"></i>
                         <p class="text-gray-500">Tidak ada tiket yang belum check-in</p>
-                        <p class="text-gray-400 text-sm mt-1">Semua tiket sudah di-check-in!</p>
+                        <p class="text-gray-400 text-sm mt-1">Semua tiket sudah di-check-in atau telah dibatalkan oleh pengguna!</p>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -593,11 +616,11 @@ $sudah_checkins = mysqli_query($conn, "
                                     <td class="px-6 py-4 text-sm text-gray-600"><?= $no_sudah++ ?></td>
                                     <td class="px-6 py-4 text-sm text-gray-600 whitespace-nowrap"><?= date('d/m/Y H:i:s', strtotime($row['waktu_checkin'])) ?></td>
                                     <td class="px-6 py-4">
-                                        <code class="text-sm bg-gray-100 px-2 py-1 rounded"><?= htmlspecialchars($row['kode_tiket']) ?></code>
+                                        <code class="text-sm bg-gray-100 px-2 py-1 rounded"><?= safe($row['kode_tiket']) ?></code>
                                     </td>
-                                    <td class="px-6 py-4 text-sm font-mono text-gray-600"><?= htmlspecialchars($row['no_order']) ?></td>
-                                    <td class="px-6 py-4 text-sm font-medium text-gray-800"><?= htmlspecialchars($row['nama_event']) ?></td>
-                                    <td class="px-6 py-4 text-sm text-gray-600"><?= htmlspecialchars($row['nama_pembeli']) ?></td>
+                                    <td class="px-6 py-4 text-sm font-mono text-gray-600"><?= safe($row['no_order']) ?></td>
+                                    <td class="px-6 py-4 text-sm font-medium text-gray-800"><?= safe($row['nama_event']) ?></td>
+                                    <td class="px-6 py-4 text-sm text-gray-600"><?= safe($row['nama_pembeli']) ?></td>
                                 </tr>
                                 <?php endwhile; ?>
                             </tbody>
@@ -643,7 +666,7 @@ $sudah_checkins = mysqli_query($conn, "
             </div>
         </div>
 
-        <!-- Panduan Penggunaan - VERSI MODERN & RAPI -->
+        <!-- Panduan Penggunaan -->
         <div class="mt-10 animate-[slideIn_0.8s_ease-out]">
             <div class="flex items-center gap-3 mb-5">
                 <div class="w-1 h-8 bg-gradient-to-b from-accent-blue to-navy rounded-full"></div>
@@ -669,13 +692,9 @@ $sudah_checkins = mysqli_query($conn, "
                         Arahkan kamera ke <strong class="text-accent-blue">QR Code tiket</strong> yang tertera pada tiket fisik atau digital. 
                         Sistem akan otomatis mendeteksi dan memproses check-in.
                     </p>
-                    <div class="mt-3 pt-3 border-t border-blue-200">
-                        <span class="text-xs text-blue-600"><i class="fas fa-lightbulb mr-1"></i> Tips: Pastikan kamera fokus pada QR Code</span>
-                    </div>
                 </div>
 
-       
-                <!-- Card 4: Check-in Cepat -->
+                <!-- Card 2: Check-in Cepat -->
                 <div class="guide-card bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-5 border border-yellow-100 shadow-sm hover:shadow-md transition-all duration-300">
                     <div class="flex items-center gap-3 mb-3">
                         <div class="w-12 h-12 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center shadow-md">
@@ -690,41 +709,34 @@ $sudah_checkins = mysqli_query($conn, "
                         Klik tombol <strong class="text-orange-600">"Check-in"</strong> pada tabel untuk memproses tiket tanpa perlu scan ulang. 
                         Dilengkapi konfirmasi sebelum diproses.
                     </p>
-                    <div class="mt-3 pt-3 border-t border-yellow-200">
-                        <span class="text-xs text-orange-600"><i class="fas fa-lightbulb mr-1"></i> Tips: Gunakan untuk tiket yang sudah discan sebelumnya</span>
-                    </div>
                 </div>
 
-    
-                <!-- Card 6: Notifikasi & Informasi -->
-                <!-- <div class="guide-card bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl p-5 border border-red-100 shadow-sm hover:shadow-md transition-all duration-300">
+                <!-- Card 3: Informasi Pembatalan -->
+                <div class="guide-card bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl p-5 border border-red-100 shadow-sm hover:shadow-md transition-all duration-300">
                     <div class="flex items-center gap-3 mb-3">
                         <div class="w-12 h-12 bg-gradient-to-r from-red-500 to-rose-500 rounded-xl flex items-center justify-center shadow-md">
-                            <i class="fas fa-bell text-white text-xl"></i>
+                            <i class="fas fa-trash-alt text-white text-xl"></i>
                         </div>
                         <div>
-                            <h4 class="font-bold text-gray-800">Notifikasi</h4>
-                            <p class="text-xs text-gray-500">Informasi Real-time</p>
+                            <h4 class="font-bold text-gray-800">Pembatalan Tiket</h4>
+                            <p class="text-xs text-gray-500">Pengguna Bisa Cancel</p>
                         </div>
                     </div>
                     <p class="text-sm text-gray-600 leading-relaxed">
-                        Setiap check-in akan menampilkan <strong class="text-rose-600">notifikasi modal</strong> dengan detail tiket. 
-                        Status berhasil atau gagal akan ditampilkan dengan jelas.
+                        Pengguna dapat <strong class="text-red-600">membatalkan tiket</strong> sebelum check-in. 
+                        Tiket yang dibatalkan akan otomatis <strong class="text-red-600">dihapus dari sistem</strong> dan tidak dapat di-check-in.
                     </p>
                     <div class="mt-3 pt-3 border-t border-red-200">
-                        <span class="text-xs text-red-600"><i class="fas fa-lightbulb mr-1"></i> Tips: Perhatikan notifikasi untuk konfirmasi check-in</span>
+                        <span class="text-xs text-red-600"><i class="fas fa-lightbulb mr-1"></i> Info: Total tiket aktif sudah otomatis menyesuaikan</span>
                     </div>
                 </div>
-            </div> -->
-
+            </div>
         </div>
     </div>
 
     <!-- Modal Custom untuk Notifikasi -->
     <div id="notificationModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50" style="backdrop-filter: blur(4px);">
-        <div class="bg-white rounded-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-95 opacity-0" id="modalContent">
-            <!-- Content akan diisi JavaScript -->
-        </div>
+        <div class="bg-white rounded-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-95 opacity-0" id="modalContent"></div>
     </div>
 
     <script>
@@ -767,27 +779,15 @@ $sudah_checkins = mysqli_query($conn, "
             let buttonColor = '';
             
             if (type === 'success') {
-                iconHtml = `
-                    <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center animate-bounce">
-                        <i class="fas fa-check-circle text-5xl text-green-500"></i>
-                    </div>
-                `;
+                iconHtml = `<div class="w-20 h-20 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center animate-bounce"><i class="fas fa-check-circle text-5xl text-green-500"></i></div>`;
                 bgGradient = 'from-green-500 to-emerald-600';
                 buttonColor = 'bg-green-500 hover:bg-green-600';
             } else if (type === 'error') {
-                iconHtml = `
-                    <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center animate-pulse">
-                        <i class="fas fa-times-circle text-5xl text-red-500"></i>
-                    </div>
-                `;
+                iconHtml = `<div class="w-20 h-20 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center animate-pulse"><i class="fas fa-times-circle text-5xl text-red-500"></i></div>`;
                 bgGradient = 'from-red-500 to-red-600';
                 buttonColor = 'bg-red-500 hover:bg-red-600';
             } else if (type === 'warning') {
-                iconHtml = `
-                    <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-yellow-100 flex items-center justify-center">
-                        <i class="fas fa-exclamation-triangle text-5xl text-yellow-500"></i>
-                    </div>
-                `;
+                iconHtml = `<div class="w-20 h-20 mx-auto mb-4 rounded-full bg-yellow-100 flex items-center justify-center"><i class="fas fa-exclamation-triangle text-5xl text-yellow-500"></i></div>`;
                 bgGradient = 'from-yellow-500 to-orange-600';
                 buttonColor = 'bg-yellow-500 hover:bg-yellow-600';
             }
@@ -797,22 +797,10 @@ $sudah_checkins = mysqli_query($conn, "
                 detailHtml = `
                     <div class="mt-4 p-4 bg-gray-50 rounded-xl">
                         <div class="grid grid-cols-2 gap-3 text-sm">
-                            <div>
-                                <p class="text-gray-500 text-xs">Kode Tiket</p>
-                                <p class="font-mono font-semibold text-gray-800 text-xs break-all">${data.kode_tiket || '-'}</p>
-                            </div>
-                            <div>
-                                <p class="text-gray-500 text-xs">Event</p>
-                                <p class="font-semibold text-gray-800 text-sm">${data.nama_event || '-'}</p>
-                            </div>
-                            <div>
-                                <p class="text-gray-500 text-xs">Jenis Tiket</p>
-                                <p class="font-semibold text-gray-800 text-sm">${data.nama_tiket || '-'}</p>
-                            </div>
-                            <div>
-                                <p class="text-gray-500 text-xs">Pembeli</p>
-                                <p class="font-semibold text-gray-800 text-sm">${data.nama_pembeli || '-'}</p>
-                            </div>
+                            <div><p class="text-gray-500 text-xs">Kode Tiket</p><p class="font-mono font-semibold text-gray-800 text-xs break-all">${data.kode_tiket || '-'}</p></div>
+                            <div><p class="text-gray-500 text-xs">Event</p><p class="font-semibold text-gray-800 text-sm">${data.nama_event || '-'}</p></div>
+                            <div><p class="text-gray-500 text-xs">Jenis Tiket</p><p class="font-semibold text-gray-800 text-sm">${data.nama_tiket || '-'}</p></div>
+                            <div><p class="text-gray-500 text-xs">Pembeli</p><p class="font-semibold text-gray-800 text-sm">${data.nama_pembeli || '-'}</p></div>
                         </div>
                     </div>
                 `;
@@ -820,23 +808,18 @@ $sudah_checkins = mysqli_query($conn, "
             
             modalContent.innerHTML = `
                 <div class="rounded-2xl overflow-hidden shadow-2xl">
-                    <div class="bg-gradient-to-r ${bgGradient} px-6 py-4">
-                        <h3 class="text-white font-bold text-lg text-center">${title}</h3>
-                    </div>
+                    <div class="bg-gradient-to-r ${bgGradient} px-6 py-4"><h3 class="text-white font-bold text-lg text-center">${title}</h3></div>
                     <div class="p-6 text-center">
                         ${iconHtml}
                         <p class="text-gray-700 mb-4">${message}</p>
                         ${detailHtml}
-                        <button onclick="closeModal()" class="${buttonColor} text-white px-6 py-2 rounded-lg font-semibold transition transform hover:scale-105 mt-4">
-                            <i class="fas fa-check mr-2"></i> OK
-                        </button>
+                        <button onclick="closeModal()" class="${buttonColor} text-white px-6 py-2 rounded-lg font-semibold transition transform hover:scale-105 mt-4"><i class="fas fa-check mr-2"></i> OK</button>
                     </div>
                 </div>
             `;
             
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-            
             setTimeout(() => {
                 modalContent.classList.remove('scale-95', 'opacity-0');
                 modalContent.classList.add('scale-100', 'opacity-100');
@@ -858,220 +841,97 @@ $sudah_checkins = mysqli_query($conn, "
         function quickCheckin(kode, eventName, pembeli, tiketType) {
             Swal.fire({
                 title: 'Konfirmasi Check-in',
-                html: `
-                    <div class="text-left">
-                        <p>Apakah Anda yakin ingin melakukan check-in untuk tiket berikut?</p>
-                        <div class="mt-3 p-3 bg-gray-50 rounded-lg">
-                            <p class="text-sm"><strong>🎫 Kode Tiket:</strong> <code class="bg-gray-200 px-1 rounded">${kode}</code></p>
-                            <p class="text-sm mt-1"><strong>📅 Event:</strong> ${eventName}</p>
-                            <p class="text-sm mt-1"><strong>👤 Pembeli:</strong> ${pembeli}</p>
-                            <p class="text-sm mt-1"><strong>🏷️ Tiket:</strong> ${tiketType}</p>
-                        </div>
-                    </div>
-                `,
+                html: `<div class="text-left"><p>Apakah Anda yakin ingin melakukan check-in untuk tiket berikut?</p><div class="mt-3 p-3 bg-gray-50 rounded-lg"><p class="text-sm"><strong>🎫 Kode Tiket:</strong> <code class="bg-gray-200 px-1 rounded">${kode}</code></p><p class="text-sm mt-1"><strong>📅 Event:</strong> ${eventName}</p><p class="text-sm mt-1"><strong>👤 Pembeli:</strong> ${pembeli}</p><p class="text-sm mt-1"><strong>🏷️ Tiket:</strong> ${tiketType}</p></div></div>`,
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#10b981',
                 cancelButtonColor: '#ef4444',
                 confirmButtonText: '<i class="fas fa-check-circle mr-2"></i> Ya, Check-in!',
-                cancelButtonText: '<i class="fas fa-times mr-2"></i> Batal',
-                background: '#ffffff',
-                backdrop: `rgba(0,0,0,0.4)`,
-                customClass: {
-                    popup: 'rounded-2xl',
-                    title: 'text-xl font-bold',
-                    confirmButton: 'px-4 py-2 rounded-lg',
-                    cancelButton: 'px-4 py-2 rounded-lg'
-                }
+                cancelButtonText: '<i class="fas fa-times mr-2"></i> Batal'
             }).then((result) => {
                 if (result.isConfirmed) {
                     fetch(window.location.href, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                         body: 'checkin_qr=1&kode_qr=' + encodeURIComponent(kode)
                     })
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
                             showModal('success', '✅ Check-in Berhasil!', data.message, data.data);
-                            setTimeout(() => {
-                                location.reload();
-                            }, 3000);
+                            setTimeout(() => location.reload(), 3000);
                         } else {
                             showModal('error', '❌ Check-in Gagal', data.message, data.data);
-                            if (data.data) {
-                                setTimeout(() => {
-                                    location.reload();
-                                }, 3000);
-                            }
+                            if (!data.data) setTimeout(() => location.reload(), 3000);
                         }
                     })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        showModal('error', '❌ Error', 'Terjadi kesalahan saat memproses check-in');
-                    });
+                    .catch(error => showModal('error', '❌ Error', 'Terjadi kesalahan saat memproses check-in'));
                 }
             });
         }
         
         // Inisialisasi QR Scanner
         function startScanner() {
-            if (html5QrCode === null) {
-                html5QrCode = new Html5Qrcode("reader");
-            }
-            
-            const config = {
-                fps: 10,
-                qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0
-            };
-            
-            html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                onScanSuccess,
-                onScanFailure
-            ).then(() => {
-                isScanning = true;
-                document.getElementById('stop-scan').classList.remove('hidden');
-            }).catch(err => {
-                console.error("Gagal memulai scanner:", err);
-                document.getElementById('qr-message').innerHTML = '<div class="text-red-600 p-3 rounded-lg bg-red-50"><i class="fas fa-exclamation-circle"></i> Gagal mengakses kamera. Pastikan Anda memberikan izin akses kamera.</div>';
-            });
+            if (html5QrCode === null) html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+            html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
+                .then(() => { isScanning = true; document.getElementById('stop-scan').classList.remove('hidden'); })
+                .catch(err => document.getElementById('qr-message').innerHTML = '<div class="text-red-600 p-3 rounded-lg bg-red-50"><i class="fas fa-exclamation-circle"></i> Gagal mengakses kamera.</div>');
         }
         
         function stopScanner() {
             if (html5QrCode && isScanning) {
-                html5QrCode.stop().then(() => {
-                    isScanning = false;
-                    document.getElementById('stop-scan').classList.add('hidden');
-                    document.getElementById('qr-message').innerHTML = '';
-                }).catch(err => {
-                    console.error("Gagal menghentikan scanner:", err);
-                });
+                html5QrCode.stop().then(() => { isScanning = false; document.getElementById('stop-scan').classList.add('hidden'); });
             }
         }
         
-        function onScanSuccess(decodedText, decodedResult) {
+        function onScanSuccess(decodedText) {
             stopScanner();
-            
             fetch(window.location.href, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: 'checkin_qr=1&kode_qr=' + encodeURIComponent(decodedText)
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     showModal('success', '✅ Check-in Berhasil!', data.message, data.data);
-                    setTimeout(() => {
-                        location.reload();
-                    }, 3000);
+                    setTimeout(() => location.reload(), 3000);
                 } else {
                     showModal('error', '❌ Check-in Gagal', data.message, data.data);
-                    if (data.data) {
-                        setTimeout(() => {
-                            location.reload();
-                        }, 3000);
-                    } else {
-                        setTimeout(() => {
-                            startScanner();
-                        }, 3000);
-                    }
+                    setTimeout(() => data.data ? location.reload() : startScanner(), 3000);
                 }
             })
-            .catch(error => {
-                console.error('Error:', error);
-                showModal('error', '❌ Error', 'Terjadi kesalahan saat memproses check-in');
-                setTimeout(() => {
-                    startScanner();
-                }, 3000);
-            });
+            .catch(error => { showModal('error', '❌ Error', 'Terjadi kesalahan'); setTimeout(() => startScanner(), 3000); });
         }
         
-        function onScanFailure(error) {
-            // Diam saja
-        }
+        function onScanFailure(error) {}
         
         function showTodayCheckin() {
             Swal.fire({
                 title: '📊 Check-in Hari Ini',
-                html: `
-                    <div class="text-center">
-                        <div class="text-6xl font-bold text-green-600 mb-2"><?= number_format($stats_today['total_checkin'], 0, ',', '.') ?></div>
-                        <p class="text-gray-500">pengunjung sudah check-in hari ini</p>
-                        <div class="mt-4 p-3 bg-green-50 rounded-lg">
-                            <i class="fas fa-calendar-alt text-green-600 mr-2"></i>
-                            <span class="text-gray-600"><?= date('d F Y') ?></span>
-                        </div>
-                    </div>
-                `,
+                html: `<div class="text-center"><div class="text-6xl font-bold text-green-600 mb-2"><?= number_format($stats_today['total_checkin'], 0, ',', '.') ?></div><p class="text-gray-500">pengunjung sudah check-in hari ini</p><div class="mt-4 p-3 bg-green-50 rounded-lg"><i class="fas fa-calendar-alt text-green-600 mr-2"></i><span class="text-gray-600"><?= date('d F Y') ?></span></div></div>`,
                 icon: 'success',
                 confirmButtonColor: '#0066cc',
-                confirmButtonText: 'Tutup',
-                background: '#ffffff',
-                customClass: {
-                    popup: 'rounded-2xl'
-                }
+                confirmButtonText: 'Tutup'
             });
         }
         
         document.getElementById('stop-scan')?.addEventListener('click', stopScanner);
-        
-        document.addEventListener('DOMContentLoaded', function() {
-            startScanner();
-            
-            // Tampilkan notifikasi dari PHP jika ada
-            <?php if ($message && $messageType): ?>
-            showModal('<?= $messageType ?>', '<?= $messageType == "success" ? "✅ Check-in Berhasil!" : "❌ Check-in Gagal" ?>', '<?= addslashes($message) ?>', <?= $lastScan ? json_encode($lastScan) : 'null' ?>);
-            <?php endif; ?>
-        });
+        document.addEventListener('DOMContentLoaded', () => startScanner());
         
         // Search dengan debounce
         let searchTimeoutBelum, searchTimeoutSudah;
         const searchBelum = document.getElementById('searchBelum');
         const searchSudah = document.getElementById('searchSudah');
+        if (searchBelum) searchBelum.addEventListener('keyup', () => { clearTimeout(searchTimeoutBelum); searchTimeoutBelum = setTimeout(() => document.getElementById('searchFormBelum').submit(), 500); });
+        if (searchSudah) searchSudah.addEventListener('keyup', () => { clearTimeout(searchTimeoutSudah); searchTimeoutSudah = setTimeout(() => document.getElementById('searchFormSudah').submit(), 500); });
         
-        if (searchBelum) {
-            searchBelum.addEventListener('keyup', function() {
-                clearTimeout(searchTimeoutBelum);
-                searchTimeoutBelum = setTimeout(() => {
-                    document.getElementById('searchFormBelum').submit();
-                }, 500);
-            });
-        }
+        document.getElementById('notificationModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeModal(); });
         
-        if (searchSudah) {
-            searchSudah.addEventListener('keyup', function() {
-                clearTimeout(searchTimeoutSudah);
-                searchTimeoutSudah = setTimeout(() => {
-                    document.getElementById('searchFormSudah').submit();
-                }, 500);
-            });
-        }
-        
-        // Clear manual input setelah submit
-        const manualForm = document.getElementById('manualForm');
-        if (manualForm) {
-            manualForm.addEventListener('submit', function(e) {
-                const kodeManual = document.getElementById('kodeManual').value;
-                if (!kodeManual.trim()) {
-                    e.preventDefault();
-                    showModal('warning', '⚠️ Perhatian', 'Silakan masukkan kode tiket terlebih dahulu!');
-                }
-            });
-        }
-        
-        // Tutup modal dengan klik di luar
-        document.getElementById('notificationModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeModal();
-            }
-        });
+        <?php if ($message && $messageType): ?>
+        showModal('<?= $messageType ?>', '<?= $messageType == "success" ? "✅ Check-in Berhasil!" : "❌ Check-in Gagal" ?>', '<?= addslashes($message) ?>', <?= $lastScan ? json_encode($lastScan) : 'null' ?>);
+        <?php endif; ?>
     </script>
 </body>
 </html>
