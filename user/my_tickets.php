@@ -15,22 +15,29 @@ if(!isset($_SESSION['nama'])) {
 
 $id_user = $_SESSION['id_user'] ?? 1;
 
-// Proses Cancel Tiket
-if(isset($_POST['cancel_ticket']) && isset($_POST['kode_tiket'])) {
+// Proses Request Cancel Tiket (Kirim request ke petugas)
+if(isset($_POST['request_cancel']) && isset($_POST['kode_tiket'])) {
     $kode_tiket = mysqli_real_escape_string($conn, $_POST['kode_tiket']);
+    $alasan = mysqli_real_escape_string($conn, $_POST['alasan_cancel']);
     
-    // Cek status tiket sebelum cancel (hanya bisa cancel jika belum check-in)
+    // Cek status tiket sebelum request cancel
     $check_query = mysqli_query($conn, "SELECT status_checkin FROM attendee WHERE kode_tiket = '$kode_tiket'");
     $check_data = mysqli_fetch_assoc($check_query);
     
     if($check_data && $check_data['status_checkin'] == 'belum') {
-        // Hapus tiket dari database
-        $delete_query = mysqli_query($conn, "DELETE FROM attendee WHERE kode_tiket = '$kode_tiket'");
+        // Update status cancel request menjadi pending
+        $update_query = mysqli_query($conn, "
+            UPDATE attendee 
+            SET cancel_request = 'pending', 
+                cancel_reason = '$alasan',
+                cancel_request_date = NOW()
+            WHERE kode_tiket = '$kode_tiket'
+        ");
         
-        if($delete_query) {
-            $_SESSION['success_message'] = "Tiket berhasil dibatalkan!";
+        if($update_query) {
+            $_SESSION['success_message'] = "Permintaan pembatalan tiket telah dikirim ke petugas. Silakan tunggu konfirmasi.";
         } else {
-            $_SESSION['error_message'] = "Gagal membatalkan tiket. Silakan coba lagi.";
+            $_SESSION['error_message'] = "Gagal mengirim permintaan. Silakan coba lagi.";
         }
     } else {
         $_SESSION['error_message'] = "Tiket tidak dapat dibatalkan karena sudah di-check-in!";
@@ -40,12 +47,15 @@ if(isset($_POST['cancel_ticket']) && isset($_POST['kode_tiket'])) {
     exit;
 }
 
-// Ambil semua tiket yang sudah dibeli user
+// Ambil semua tiket yang sudah dibeli user (status order masih 'pending' atau 'paid' dan belum di-cancel)
 $query_tickets = mysqli_query($conn, "
     SELECT 
         a.id_attendee,
         a.kode_tiket,
         a.status_checkin,
+        a.cancel_request,
+        a.cancel_reason,
+        a.cancel_request_date,
         a.created_at as tiket_created_at,
         od.qty,
         od.subtotal,
@@ -54,6 +64,7 @@ $query_tickets = mysqli_query($conn, "
         o.no_order,
         o.tanggal_order,
         o.total as total_order,
+        o.status as order_status,
         e.nama_event,
         e.tanggal as event_tanggal,
         e.foto as event_foto,
@@ -64,7 +75,7 @@ $query_tickets = mysqli_query($conn, "
     JOIN orders o ON od.id_order = o.id_order
     JOIN event e ON o.id_event = e.id_event
     JOIN venue v ON e.id_venue = v.id_venue
-    WHERE o.id_user = $id_user
+    WHERE o.id_user = $id_user AND (o.status != 'cancel' OR o.status IS NULL)
     ORDER BY o.tanggal_order DESC, a.id_attendee ASC
 ");
 
@@ -144,6 +155,18 @@ function safe($data) {
         }
         .btn-cancel:hover {
             transform: scale(1.05);
+        }
+        .status-pending {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        .status-approved {
+            background: #d1fae5;
+            color: #059669;
+        }
+        .status-rejected {
+            background: #fee2e2;
+            color: #dc2626;
         }
     </style>
 </head>
@@ -268,6 +291,12 @@ function safe($data) {
                             $event_date = strtotime($order['event_tanggal']);
                             $current_date = time();
                             $is_event_passed = $event_date < $current_date;
+                            
+                            // Cek status cancel request
+                            $cancel_status = $ticket['cancel_request'] ?? null;
+                            $is_cancel_pending = ($cancel_status == 'pending');
+                            $is_cancel_approved = ($cancel_status == 'approved');
+                            $is_cancel_rejected = ($cancel_status == 'rejected');
                         ?>
                         <div class="ticket-card border border-gray-200 rounded-xl p-4 hover:shadow-lg transition">
                             <div class="flex justify-between items-start mb-3">
@@ -286,7 +315,21 @@ function safe($data) {
                                         </span>
                                         <?php endif; ?>
                                         
-                                        <?php if($is_event_passed && $ticket['status_checkin'] == 'belum'): ?>
+                                        <?php if($is_cancel_pending): ?>
+                                        <span class="px-2 py-1 status-pending rounded-lg text-xs font-semibold">
+                                            <i class="fas fa-hourglass-half"></i> Menunggu Konfirmasi Cancel
+                                        </span>
+                                        <?php elseif($is_cancel_approved): ?>
+                                        <span class="px-2 py-1 status-approved rounded-lg text-xs font-semibold">
+                                            <i class="fas fa-check-circle"></i> Cancel Disetujui
+                                        </span>
+                                        <?php elseif($is_cancel_rejected): ?>
+                                        <span class="px-2 py-1 status-rejected rounded-lg text-xs font-semibold">
+                                            <i class="fas fa-times-circle"></i> Cancel Ditolak
+                                        </span>
+                                        <?php endif; ?>
+                                        
+                                        <?php if($is_event_passed && $ticket['status_checkin'] == 'belum' && !$is_cancel_pending && !$is_cancel_approved): ?>
                                         <span class="px-2 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-semibold">
                                             <i class="fas fa-exclamation-circle"></i> Event Telah Lewat
                                         </span>
@@ -315,12 +358,20 @@ function safe($data) {
                                         <i class="fas fa-eye"></i> Detail
                                     </button>
                                     
-                                    <!-- Tombol Cancel (hanya untuk tiket yang belum check-in dan event belum lewat) -->
-                                    <?php if($ticket['status_checkin'] == 'belum' && !$is_event_passed): ?>
-                                    <button onclick="confirmCancel('<?= $ticket['kode_tiket'] ?>', '<?= safe($ticket['nama_tiket']) ?>', '<?= safe($order['nama_event']) ?>')" 
+                                    <!-- Tombol Cancel (hanya untuk tiket yang belum check-in, event belum lewat, dan belum request cancel) -->
+                                    <?php if($ticket['status_checkin'] == 'belum' && !$is_event_passed && !$is_cancel_pending && !$is_cancel_approved): ?>
+                                    <button onclick="requestCancel('<?= $ticket['kode_tiket'] ?>', '<?= safe($ticket['nama_tiket']) ?>', '<?= safe($order['nama_event']) ?>')" 
                                             class="text-red-600 text-sm hover:underline flex items-center gap-1 btn-cancel no-print">
-                                        <i class="fas fa-times-circle"></i> Cancel
+                                        <i class="fas fa-times-circle"></i> Request Cancel
                                     </button>
+                                    <?php elseif($is_cancel_pending): ?>
+                                    <span class="text-orange-600 text-xs flex items-center gap-1">
+                                        <i class="fas fa-hourglass-half"></i> Menunggu Konfirmasi
+                                    </span>
+                                    <?php elseif($is_cancel_approved): ?>
+                                    <span class="text-green-600 text-xs flex items-center gap-1">
+                                        <i class="fas fa-check-circle"></i> Tiket Dibatalkan
+                                    </span>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -369,30 +420,49 @@ function safe($data) {
         </div>
     </div>
     
-    <!-- Form Cancel Tiket (Hidden) -->
+    <!-- Form Request Cancel Tiket (Hidden) -->
     <form id="cancelForm" method="POST" action="" class="hidden">
-        <input type="hidden" name="cancel_ticket" value="1">
+        <input type="hidden" name="request_cancel" value="1">
         <input type="hidden" name="kode_tiket" id="cancel_kode_tiket">
+        <input type="hidden" name="alasan_cancel" id="cancel_alasan">
     </form>
     
     <script>
         let currentTicketData = null;
         
-        function confirmCancel(kodeTiket, namaTiket, namaEvent) {
+        function requestCancel(kodeTiket, namaTiket, namaEvent) {
             Swal.fire({
-                title: 'Batalkan Tiket?',
-                html: `Apakah Anda yakin ingin membatalkan tiket:<br><strong>${namaTiket}</strong><br>untuk event<br><strong>${namaEvent}</strong>?`,
-                icon: 'warning',
+                title: 'Request Pembatalan Tiket',
+                html: `
+                    <div class="text-left">
+                        <p class="mb-2">Apakah Anda yakin ingin membatalkan tiket:</p>
+                        <div class="bg-gray-50 p-3 rounded-lg mb-3">
+                            <p><strong>🎫 Tiket:</strong> ${namaTiket}</p>
+                            <p><strong>📅 Event:</strong> ${namaEvent}</p>
+                            <p><strong>🔑 Kode:</strong> ${kodeTiket}</p>
+                        </div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Alasan Pembatalan:</label>
+                        <textarea id="alasanCancel" class="w-full border border-gray-300 rounded-lg p-2 text-sm" rows="3" placeholder="Masukkan alasan pembatalan..."></textarea>
+                    </div>
+                `,
+                icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
                 cancelButtonColor: '#3085d6',
-                confirmButtonText: 'Ya, Batalkan!',
-                cancelButtonText: 'Tidak, Kembali',
-                reverseButtons: true
+                confirmButtonText: 'Kirim Request',
+                cancelButtonText: 'Batal',
+                preConfirm: () => {
+                    const alasan = document.getElementById('alasanCancel').value;
+                    if (!alasan.trim()) {
+                        Swal.showValidationMessage('Alasan pembatalan harus diisi!');
+                        return false;
+                    }
+                    return { alasan: alasan };
+                }
             }).then((result) => {
                 if (result.isConfirmed) {
-                    // Set kode tiket dan submit form
                     document.getElementById('cancel_kode_tiket').value = kodeTiket;
+                    document.getElementById('cancel_alasan').value = result.value.alasan;
                     document.getElementById('cancelForm').submit();
                 }
             });
