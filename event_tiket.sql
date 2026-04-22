@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Apr 14, 2026 at 07:55 AM
+-- Generation Time: Apr 22, 2026 at 03:05 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -32,18 +32,23 @@ CREATE TABLE `attendee` (
   `id_detail` int(11) DEFAULT NULL,
   `kode_tiket` varchar(50) DEFAULT NULL,
   `status_checkin` enum('belum','sudah') DEFAULT NULL,
-  `waktu_checkin` datetime DEFAULT NULL
+  `created_at` datetime DEFAULT NULL,
+  `waktu_checkin` datetime DEFAULT NULL,
+  `cancel_request` enum('pending','approved','rejected') DEFAULT NULL,
+  `cancel_reason` text DEFAULT NULL,
+  `cancel_request_date` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `attendee`
 --
 
-INSERT INTO `attendee` (`id_attendee`, `id_detail`, `kode_tiket`, `status_checkin`, `waktu_checkin`) VALUES
-(1, 4, 'TKT-69DDA58C913A9', 'belum', NULL),
-(2, 5, 'TKT-69DDA58FB4387', 'belum', NULL),
-(3, 6, 'TKT-69DDA5B290DD8', 'sudah', '2026-04-14 09:28:48'),
-(4, 6, 'TKT-69DDA5B291655', 'sudah', '2026-04-14 09:28:11');
+INSERT INTO `attendee` (`id_attendee`, `id_detail`, `kode_tiket`, `status_checkin`, `created_at`, `waktu_checkin`, `cancel_request`, `cancel_reason`, `cancel_request_date`) VALUES
+(21, 17, 'TKT-20260420-DC3EB9-01', 'sudah', '2026-04-19 18:59:09', '2026-04-19 19:14:06', NULL, NULL, NULL),
+(22, 17, 'TKT-20260420-DC51D3-02', 'sudah', '2026-04-19 18:59:09', '2026-04-19 19:14:12', NULL, NULL, NULL),
+(23, 18, 'TKT-20260420-52E523-01', 'sudah', '2026-04-19 19:00:21', '2026-04-19 19:14:18', NULL, NULL, NULL),
+(24, 19, 'TKT-20260420-96D3D2-01', 'belum', '2026-04-19 19:01:29', NULL, NULL, NULL, NULL),
+(25, 20, 'TKT-20260420-4A0EB7-01', 'sudah', '2026-04-19 19:01:40', '2026-04-20 17:39:40', NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -55,15 +60,20 @@ CREATE TABLE `event` (
   `id_event` int(11) NOT NULL,
   `nama_event` varchar(150) DEFAULT NULL,
   `tanggal` date DEFAULT NULL,
-  `id_venue` int(11) DEFAULT NULL
+  `id_venue` int(11) DEFAULT NULL,
+  `deskripsi` text DEFAULT NULL,
+  `foto` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `event`
 --
 
-INSERT INTO `event` (`id_event`, `nama_event`, `tanggal`, `id_venue`) VALUES
-(2, 'grebek wayang kulit', '2026-04-14', 2);
+INSERT INTO `event` (`id_event`, `nama_event`, `tanggal`, `id_venue`, `deskripsi`, `foto`) VALUES
+(9, 'Gema Suara Nadin Amizah', '2026-04-25', 8, 'Bernyanyi bersama nadin amizah', '1776649582_69e5856e0c741.jpg'),
+(10, 'Suara Baskara', '2026-04-26', 9, 'Angkat minumanmu bersedih bersama sama', '1776649761_69e58621311d9.jpg'),
+(11, 'Kata Pamungkas', '2026-04-27', 10, 'Thank you fot stopping by, leave the door wide open.', '1776650006_69e587163cf3a.jpg'),
+(12, 'Reality Club', '2026-04-28', 11, 'And if i was a fool for youu\r\n', '1776650216_69e587e8ad622.jpg');
 
 -- --------------------------------------------------------
 
@@ -73,8 +83,12 @@ INSERT INTO `event` (`id_event`, `nama_event`, `tanggal`, `id_venue`) VALUES
 
 CREATE TABLE `orders` (
   `id_order` int(11) NOT NULL,
+  `no_order` varchar(50) DEFAULT NULL,
   `id_user` int(11) DEFAULT NULL,
+  `id_event` int(11) DEFAULT NULL,
   `tanggal_order` datetime DEFAULT NULL,
+  `subtotal` int(11) DEFAULT NULL,
+  `potongan` int(11) DEFAULT NULL,
   `total` int(11) DEFAULT NULL,
   `status` enum('pending','paid','cancel') DEFAULT NULL,
   `id_voucher` int(11) DEFAULT NULL
@@ -84,14 +98,14 @@ CREATE TABLE `orders` (
 -- Dumping data for table `orders`
 --
 
-INSERT INTO `orders` (`id_order`, `id_user`, `tanggal_order`, `total`, `status`, `id_voucher`) VALUES
-(1, 2, '2026-04-14 09:13:19', 0, 'pending', NULL),
-(2, 2, '2026-04-14 09:19:13', 25000, 'pending', NULL),
-(3, 2, '2026-04-14 09:19:30', 50000, 'pending', NULL),
-(4, 2, '2026-04-14 09:22:19', 20000, 'pending', 2),
-(5, 2, '2026-04-14 09:25:16', 20000, 'pending', 2),
-(6, 2, '2026-04-14 09:25:19', 20000, 'pending', 2),
-(7, 2, '2026-04-14 09:25:54', 45000, 'pending', 2);
+INSERT INTO `orders` (`id_order`, `no_order`, `id_user`, `id_event`, `tanggal_order`, `subtotal`, `potongan`, `total`, `status`, `id_voucher`) VALUES
+(18, 'ORD-20260420-69E5886DC00EA', 4, 9, '2026-04-20 03:59:09', 250000, 62500, 187500, 'pending', 13),
+(19, 'ORD-20260420-69E588B526AD6', 5, 11, '2026-04-20 04:00:21', 250000, 37500, 212500, 'pending', 15),
+(20, 'ORD-20260420-69E588F9688D0', 6, 10, '2026-04-20 04:01:29', 300000, 45000, 255000, 'pending', 14),
+(21, 'ORD-20260420-69E589049907A', 6, 12, '2026-04-20 04:01:40', 350000, 87500, 262500, 'pending', 16),
+(22, 'ORD-20260420-69E5AB58E96D9', 4, 11, '2026-04-20 06:28:08', 250000, 37500, 212500, 'pending', 15),
+(23, 'ORD-20260421-69E6C709AD067', 4, 12, '2026-04-21 02:38:33', 700000, 175000, 525000, 'cancel', 16),
+(24, 'ORD-20260421-69E6CF35B9DB7', 6, 11, '2026-04-21 03:13:25', 250000, 37500, 212500, 'cancel', 15);
 
 -- --------------------------------------------------------
 
@@ -103,6 +117,8 @@ CREATE TABLE `order_detail` (
   `id_detail` int(11) NOT NULL,
   `id_order` int(11) DEFAULT NULL,
   `id_tiket` int(11) DEFAULT NULL,
+  `nama_tiket` varchar(100) DEFAULT NULL,
+  `harga` int(11) DEFAULT NULL,
   `qty` int(11) DEFAULT NULL,
   `subtotal` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -111,13 +127,14 @@ CREATE TABLE `order_detail` (
 -- Dumping data for table `order_detail`
 --
 
-INSERT INTO `order_detail` (`id_detail`, `id_order`, `id_tiket`, `qty`, `subtotal`) VALUES
-(1, 2, 2, 1, 25000),
-(2, 3, 2, 2, 50000),
-(3, 4, 2, 1, 25000),
-(4, 5, 2, 1, 25000),
-(5, 6, 2, 1, 25000),
-(6, 7, 2, 2, 50000);
+INSERT INTO `order_detail` (`id_detail`, `id_order`, `id_tiket`, `nama_tiket`, `harga`, `qty`, `subtotal`) VALUES
+(17, 18, 8, 'Sorai Kita', 125000, 2, 250000),
+(18, 19, 10, 'Pamungkas ', 250000, 1, 250000),
+(19, 20, 9, 'Baskara Hindia', 300000, 1, 300000),
+(20, 21, 11, 'Reality Club', 350000, 1, 350000),
+(21, 22, 10, 'Pamungkas ', 250000, 1, 250000),
+(22, 23, 11, 'Reality Club', 350000, 2, 700000),
+(23, 24, 10, 'Pamungkas ', 250000, 1, 250000);
 
 -- --------------------------------------------------------
 
@@ -138,7 +155,10 @@ CREATE TABLE `tiket` (
 --
 
 INSERT INTO `tiket` (`id_tiket`, `id_event`, `nama_tiket`, `harga`, `kuota`) VALUES
-(2, 2, 'tiket wayang', 25000, 10);
+(8, 9, 'Sorai Kita', 125000, 48),
+(9, 10, 'Baskara Hindia', 300000, 99),
+(10, 11, 'Pamungkas ', 250000, 87),
+(11, 12, 'Reality Club', 350000, 47);
 
 -- --------------------------------------------------------
 
@@ -160,8 +180,11 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`id_user`, `nama`, `email`, `password`, `role`) VALUES
 (1, 'Admin', 'admin@gmail.com', '123', 'admin'),
-(2, 'User', 'user@gmail.com', '123', 'user'),
-(3, 'Petugas', 'petugas@gmail.com', '123', 'petugas');
+(3, 'Petugas', 'petugas@gmail.com', '123', 'petugas'),
+(4, 'Tasya Husna Kamila', 'tasya@gmail.com', 'tasya123', 'user'),
+(5, 'El Syarawi Benedict', 'el@gmail.com', 'el123', 'user'),
+(6, 'Abigail Lituhayu', 'abigail@gmail.com', 'abigail123', 'user'),
+(7, 'Midas HD', 'hd@gmail.com', 'hd123', 'user');
 
 -- --------------------------------------------------------
 
@@ -181,7 +204,10 @@ CREATE TABLE `venue` (
 --
 
 INSERT INTO `venue` (`id_venue`, `nama_venue`, `alamat`, `kapasitas`) VALUES
-(2, 'alon alon', 'magelang', 10);
+(8, 'Stadion Utama', 'Magelang, Jawa Tengah', 50),
+(9, 'Stadion Utara', 'Surabaya, Jawa Timur', 100),
+(10, 'Lapangan Selatan', 'Pati, Jawa Tengah', 200),
+(11, 'Gedung Jayaraja', 'Solo, Jawa Tengah', 100);
 
 -- --------------------------------------------------------
 
@@ -193,6 +219,8 @@ CREATE TABLE `voucher` (
   `id_voucher` int(11) NOT NULL,
   `kode_voucher` varchar(20) DEFAULT NULL,
   `potongan` int(11) DEFAULT NULL,
+  `id_event` int(11) DEFAULT NULL,
+  `id_venue` int(11) DEFAULT NULL,
   `kuota` int(11) DEFAULT NULL,
   `status` enum('aktif','nonaktif') DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -201,8 +229,11 @@ CREATE TABLE `voucher` (
 -- Dumping data for table `voucher`
 --
 
-INSERT INTO `voucher` (`id_voucher`, `kode_voucher`, `potongan`, `kuota`, `status`) VALUES
-(2, 'wayang kulit', 5000, 1, 'aktif');
+INSERT INTO `voucher` (`id_voucher`, `kode_voucher`, `potongan`, `id_event`, `id_venue`, `kuota`, `status`) VALUES
+(13, 'SORAINA01', 25, 9, NULL, 19, 'aktif'),
+(14, 'MEMBASUH02', 15, 10, NULL, 99, 'aktif'),
+(15, 'BAMBINA03', 15, 11, NULL, 17, 'aktif'),
+(16, 'ALEXANDRA04', 25, 12, NULL, 28, 'aktif');
 
 --
 -- Indexes for dumped tables
@@ -261,7 +292,9 @@ ALTER TABLE `venue`
 -- Indexes for table `voucher`
 --
 ALTER TABLE `voucher`
-  ADD PRIMARY KEY (`id_voucher`);
+  ADD PRIMARY KEY (`id_voucher`),
+  ADD KEY `fk_voucher_to_event` (`id_event`),
+  ADD KEY `fk_voucher_to_venue` (`id_venue`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -271,49 +304,49 @@ ALTER TABLE `voucher`
 -- AUTO_INCREMENT for table `attendee`
 --
 ALTER TABLE `attendee`
-  MODIFY `id_attendee` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id_attendee` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
 
 --
 -- AUTO_INCREMENT for table `event`
 --
 ALTER TABLE `event`
-  MODIFY `id_event` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_event` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `orders`
 --
 ALTER TABLE `orders`
-  MODIFY `id_order` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id_order` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- AUTO_INCREMENT for table `order_detail`
 --
 ALTER TABLE `order_detail`
-  MODIFY `id_detail` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id_detail` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- AUTO_INCREMENT for table `tiket`
 --
 ALTER TABLE `tiket`
-  MODIFY `id_tiket` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_tiket` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id_user` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id_user` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `venue`
 --
 ALTER TABLE `venue`
-  MODIFY `id_venue` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_venue` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `voucher`
 --
 ALTER TABLE `voucher`
-  MODIFY `id_voucher` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id_voucher` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- Constraints for dumped tables
@@ -350,6 +383,13 @@ ALTER TABLE `order_detail`
 --
 ALTER TABLE `tiket`
   ADD CONSTRAINT `tiket_ibfk_1` FOREIGN KEY (`id_event`) REFERENCES `event` (`id_event`);
+
+--
+-- Constraints for table `voucher`
+--
+ALTER TABLE `voucher`
+  ADD CONSTRAINT `fk_voucher_to_event` FOREIGN KEY (`id_event`) REFERENCES `event` (`id_event`) ON DELETE SET NULL,
+  ADD CONSTRAINT `fk_voucher_to_venue` FOREIGN KEY (`id_venue`) REFERENCES `venue` (`id_venue`) ON DELETE SET NULL;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
